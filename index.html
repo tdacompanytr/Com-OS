@@ -11,6 +11,10 @@
         font-family: 'Segoe UI', sans-serif;
         overflow: hidden;
         user-select: none;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        /* Force GPU Acceleration for common elements */
+        transform: translateZ(0);
       }
       /* Custom Scrollbar for Windows feel */
       ::-webkit-scrollbar {
@@ -22,9 +26,21 @@
       }
       ::-webkit-scrollbar-thumb {
         background: #444; 
+        border-radius: 5px;
       }
       ::-webkit-scrollbar-thumb:hover {
         background: #555; 
+      }
+      
+      /* 120Hz Feel - Custom Easing */
+      .ease-fluid {
+        transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      
+      /* GPU Layer Promotion for heavy elements */
+      .gpu-layer {
+        will-change: transform, opacity;
+        transform: translate3d(0,0,0);
       }
     </style>
   <script type="importmap">

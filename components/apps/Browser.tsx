@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { ArrowLeft, ArrowRight, RotateCw, Plus, X, Globe, Clock, Trash2, Search, MoreVertical, Eraser, ExternalLink, AlertTriangle, Link2Off } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ArrowLeft, ArrowRight, RotateCw, Plus, X, Globe, Clock, Trash2, Search, MoreVertical, Eraser, ExternalLink, AlertTriangle, Link2Off, Star, Layout, Bookmark } from 'lucide-react';
 import { ThemeConfig } from '../../types';
 
 interface Tab {
@@ -19,27 +19,19 @@ interface HistoryEntry {
   timestamp: Date;
 }
 
+interface BookmarkItem {
+  id: string;
+  url: string;
+  title: string;
+  icon?: React.ReactNode;
+}
+
 interface BrowserAppProps {
     theme?: ThemeConfig;
 }
 
-const BLOCKED_DOMAINS = [
-  'chatgpt.com',
-  'openai.com',
-  'youtube.com',
-  'facebook.com',
-  'twitter.com',
-  'x.com',
-  'instagram.com',
-  'whatsapp.com',
-  'tiktok.com',
-  'reddit.com',
-  'github.com',
-  'linkedin.com',
-  'netflix.com',
-  'spotify.com',
-  'discord.com'
-];
+// Block list removed to allow all sites to attempt loading
+const BLOCKED_DOMAINS: string[] = [];
 
 const BrowserApp: React.FC<BrowserAppProps> = ({ theme }) => {
   const [tabs, setTabs] = useState<Tab[]>([
@@ -60,6 +52,14 @@ const BrowserApp: React.FC<BrowserAppProps> = ({ theme }) => {
   const [globalHistory, setGlobalHistory] = useState<HistoryEntry[]>([
     { id: 'initial-1', url: 'https://www.google.com', title: 'Google', timestamp: new Date() }
   ]);
+
+  // Bookmarks State
+  const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([
+      { id: 'bm-1', url: 'https://www.google.com/search?igu=1', title: 'Google' },
+      { id: 'bm-2', url: 'https://www.wikipedia.org', title: 'Wikipedia' },
+      { id: 'bm-3', url: 'com://history', title: 'Geçmiş' }
+  ]);
+  const [showBookmarksBar, setShowBookmarksBar] = useState(true);
   
   // Local state for History Page Search
   const [historySearchTerm, setHistorySearchTerm] = useState('');
@@ -80,11 +80,6 @@ const BrowserApp: React.FC<BrowserAppProps> = ({ theme }) => {
     } catch {
       return 'Yeni Sekme';
     }
-  };
-
-  const isBlocked = (url: string) => {
-    if (!url) return false;
-    return BLOCKED_DOMAINS.some(domain => url.toLowerCase().includes(domain));
   };
 
   const addToGlobalHistory = (url: string, title: string) => {
@@ -152,6 +147,19 @@ const BrowserApp: React.FC<BrowserAppProps> = ({ theme }) => {
     }
   };
 
+  // Helper to make some sites iframe friendly
+  const convertUrlToEmbedFriendly = (url: string) => {
+      let newUrl = url;
+      // YouTube
+      if (newUrl.includes('youtube.com/watch?v=')) {
+          newUrl = newUrl.replace('watch?v=', 'embed/');
+      } else if (newUrl.includes('youtu.be/')) {
+          newUrl = newUrl.replace('youtu.be/', 'youtube.com/embed/');
+      }
+      // Add more as needed
+      return newUrl;
+  };
+
   const navigate = (newUrl: string) => {
     // 1. Reset Error State
     updateTab(activeTabId, { error: null });
@@ -162,14 +170,11 @@ const BrowserApp: React.FC<BrowserAppProps> = ({ theme }) => {
     if (finalUrl === 'com://history') {
         // Pass through
     } 
-    // Check if it's meant to be a URL but is invalid
+    // Check if it's meant to be a URL
     else if (finalUrl.startsWith('http://') || finalUrl.startsWith('https://')) {
         if (!isValidUrlStructure(finalUrl)) {
-            updateTab(activeTabId, { 
-                inputValue: finalUrl,
-                error: 'Girilen URL geçerli bir web adresi formatında değil.' 
-            });
-            return;
+            // Instead of showing error, fallback to search
+            finalUrl = `https://www.google.com/search?q=${encodeURIComponent(finalUrl)}&igu=1`;
         }
     }
     // Handle domains without protocol or search queries
@@ -193,6 +198,9 @@ const BrowserApp: React.FC<BrowserAppProps> = ({ theme }) => {
              finalUrl = `https://www.google.com/search?q=${encodeURIComponent(finalUrl)}&igu=1`;
         }
     }
+
+    // Apply Smart Embed Logic
+    finalUrl = convertUrlToEmbedFriendly(finalUrl);
 
     const newHistory = activeTab.history.slice(0, activeTab.currentIndex + 1);
     newHistory.push(finalUrl);
@@ -266,9 +274,35 @@ const BrowserApp: React.FC<BrowserAppProps> = ({ theme }) => {
   };
 
   const openInExternalTab = () => {
-      if (activeTab.url && activeTab.url !== 'com://history' && !activeTab.error) {
+      if (activeTab.url && activeTab.url !== 'com://history') {
           window.open(activeTab.url, '_blank');
       }
+  };
+
+  // --- Bookmark Logic ---
+
+  const isBookmarked = useMemo(() => {
+      return bookmarks.some(b => b.url === activeTab.url);
+  }, [bookmarks, activeTab.url]);
+
+  const toggleBookmark = () => {
+      if (activeTab.error) return;
+      
+      if (isBookmarked) {
+          setBookmarks(prev => prev.filter(b => b.url !== activeTab.url));
+      } else {
+          setBookmarks(prev => [...prev, {
+              id: Date.now().toString(),
+              url: activeTab.url,
+              title: activeTab.title || 'Site'
+          }]);
+      }
+  };
+
+  const removeBookmark = (e: React.MouseEvent, id: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setBookmarks(prev => prev.filter(b => b.id !== id));
   };
 
   // --- History Page Logic ---
@@ -324,67 +358,103 @@ const BrowserApp: React.FC<BrowserAppProps> = ({ theme }) => {
       </div>
 
       {/* Navigation Bar */}
-      <div className="flex items-center gap-2 p-2 bg-white border-b border-gray-200 z-20">
-        <button onClick={goBack} disabled={activeTab.currentIndex === 0} className="p-1.5 hover:bg-gray-100 rounded-full disabled:opacity-30 text-gray-600">
-          <ArrowLeft size={16} />
-        </button>
-        <button onClick={goForward} disabled={activeTab.currentIndex === activeTab.history.length - 1} className="p-1.5 hover:bg-gray-100 rounded-full disabled:opacity-30 text-gray-600">
-          <ArrowRight size={16} />
-        </button>
-        <button onClick={reload} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-600">
-          <RotateCw size={14} />
-        </button>
-        
-        <div className="flex-1 relative">
-           <input
-            className={`w-full bg-[#f1f3f4] hover:bg-[#eceef1] focus:bg-white border border-transparent focus:${theme?.border || 'border-blue-500'} focus:shadow-sm rounded-full py-1.5 px-10 text-sm focus:outline-none transition-all text-gray-700 placeholder-gray-500`}
-            value={activeTab.inputValue}
-            onChange={(e) => updateTab(activeTabId, { inputValue: e.target.value })}
-            onKeyDown={handleKeyDown}
-            onFocus={(e) => e.target.select()}
-            placeholder="URL değiştirmek için buraya yazın veya com://history"
-          />
-           <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-             {activeTab.url === 'com://history' ? <Clock size={14} /> : <Globe size={14} />}
-           </div>
-        </div>
-
-        <button 
-            onClick={openInExternalTab}
-            className="p-1.5 hover:bg-gray-100 rounded-full text-gray-600"
-            title="Harici Tarayıcıda Aç"
-        >
-             <ExternalLink size={18} />
-        </button>
-
-        <button 
-            onClick={() => navigate('com://history')}
-            className={`p-1.5 hover:bg-gray-100 rounded-full ${activeTab.url === 'com://history' ? `${themeText} bg-opacity-10 bg-gray-200` : 'text-gray-600'}`}
-            title="Geçmiş"
-        >
-             <Clock size={18} />
-        </button>
-        
-        <div className="relative">
-            <button 
-                onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-                className={`p-1.5 hover:bg-gray-100 rounded-full ${showMenu ? 'bg-gray-200' : 'text-gray-600'}`}
-            >
-                <MoreVertical size={18} />
+      <div className="flex flex-col bg-white border-b border-gray-200 z-20">
+          <div className="flex items-center gap-2 p-2 pb-1">
+            <button onClick={goBack} disabled={activeTab.currentIndex === 0} className="p-1.5 hover:bg-gray-100 rounded-full disabled:opacity-30 text-gray-600">
+            <ArrowLeft size={16} />
             </button>
+            <button onClick={goForward} disabled={activeTab.currentIndex === activeTab.history.length - 1} className="p-1.5 hover:bg-gray-100 rounded-full disabled:opacity-30 text-gray-600">
+            <ArrowRight size={16} />
+            </button>
+            <button onClick={reload} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-600">
+            <RotateCw size={14} />
+            </button>
+            
+            <div className="flex-1 relative">
+            <input
+                className={`w-full bg-[#f1f3f4] hover:bg-[#eceef1] focus:bg-white border border-transparent focus:${theme?.border || 'border-blue-500'} focus:shadow-sm rounded-full py-1.5 px-10 text-sm focus:outline-none transition-all text-gray-700 placeholder-gray-500`}
+                value={activeTab.inputValue}
+                onChange={(e) => updateTab(activeTabId, { inputValue: e.target.value })}
+                onKeyDown={handleKeyDown}
+                onFocus={(e) => e.target.select()}
+                placeholder="URL değiştirmek için buraya yazın veya com://history"
+            />
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                {activeTab.url === 'com://history' ? <Clock size={14} /> : <Globe size={14} />}
+            </div>
+            
+            {/* Bookmark Star Button */}
+            <button 
+                onClick={toggleBookmark}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-yellow-500 transition-colors"
+                title="Yer İmlerine Ekle"
+            >
+                <Star size={14} className={isBookmarked ? "fill-yellow-500 text-yellow-500" : ""} />
+            </button>
+            </div>
 
-            {showMenu && (
-                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-md shadow-xl border border-gray-200 py-1 z-50">
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); clearTabHistory(); }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-                    >
-                        <Eraser size={14} />
-                        Sekme Geçmişini Temizle
-                    </button>
-                </div>
-            )}
-        </div>
+            <button 
+                onClick={openInExternalTab}
+                className="p-1.5 hover:bg-gray-100 rounded-full text-gray-600"
+                title="Harici Tarayıcıda Aç"
+            >
+                <ExternalLink size={18} />
+            </button>
+            
+            <div className="relative">
+                <button 
+                    onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+                    className={`p-1.5 hover:bg-gray-100 rounded-full ${showMenu ? 'bg-gray-200' : 'text-gray-600'}`}
+                >
+                    <MoreVertical size={18} />
+                </button>
+
+                {showMenu && (
+                    <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-md shadow-xl border border-gray-200 py-1 z-50">
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); clearTabHistory(); }}
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                        >
+                            <Eraser size={14} />
+                            Sekme Geçmişini Temizle
+                        </button>
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); navigate('com://history'); setShowMenu(false); }}
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                        >
+                            <Clock size={14} />
+                            Geçmişi Görüntüle
+                        </button>
+                        <div className="h-[1px] bg-gray-100 my-1 mx-2"></div>
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); setShowBookmarksBar(!showBookmarksBar); setShowMenu(false); }}
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                        >
+                            <Bookmark size={14} />
+                            {showBookmarksBar ? 'Yer İmleri Çubuğunu Gizle' : 'Yer İmleri Çubuğunu Göster'}
+                        </button>
+                    </div>
+                )}
+            </div>
+          </div>
+          
+          {/* Bookmarks Bar */}
+          {showBookmarksBar && (
+              <div className="flex items-center gap-1 px-2 pb-1.5 pt-0.5 text-xs border-t border-transparent">
+                  {bookmarks.map(bm => (
+                      <div 
+                        key={bm.id}
+                        className="flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-200 cursor-pointer text-gray-700 max-w-[150px] group relative"
+                        onClick={() => navigate(bm.url)}
+                        onContextMenu={(e) => removeBookmark(e, bm.id)}
+                        title={bm.title + " (Silmek için sağ tıkla)"}
+                      >
+                          <Globe size={12} className="text-gray-400 shrink-0" />
+                          <span className="truncate">{bm.title}</span>
+                      </div>
+                  ))}
+              </div>
+          )}
       </div>
       
       {/* Content Area */}
@@ -395,21 +465,14 @@ const BrowserApp: React.FC<BrowserAppProps> = ({ theme }) => {
                 className={`w-full h-full bg-white ${activeTabId === tab.id ? 'flex flex-col' : 'hidden'}`}
             >
                 {tab.error ? (
-                    // --- Error UI ---
+                    // --- Error UI Removed, Fallback to Search handled in navigate ---
+                    // This block is effectively unreachable now due to updated logic, but kept as safety fallback
                     <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 text-center p-8">
-                        <div className="bg-red-100 p-4 rounded-full mb-6">
+                         <div className="bg-red-100 p-4 rounded-full mb-6">
                             <Link2Off size={48} className="text-red-500" />
                         </div>
-                        <h2 className="text-xl font-semibold text-gray-800 mb-2">Geçersiz URL</h2>
-                        <p className="text-gray-600 max-w-md mb-8">
-                            {tab.error}
-                        </p>
-                        <button 
-                            onClick={() => navigate('https://www.google.com/search?igu=1')}
-                            className="bg-gray-800 hover:bg-black text-white px-6 py-2.5 rounded-md font-medium transition-colors shadow-sm"
-                        >
-                            Ana Sayfaya Dön
-                        </button>
+                        <h2 className="text-xl font-semibold text-gray-800 mb-2">Yönlendirme Yapılıyor...</h2>
+                        <button onClick={() => navigate('https://www.google.com/search?igu=1')} className="text-blue-500 underline">Ana Sayfa</button>
                     </div>
                 ) : tab.url === 'com://history' ? (
                     // --- History Page UI ---
@@ -480,59 +543,36 @@ const BrowserApp: React.FC<BrowserAppProps> = ({ theme }) => {
                 ) : (
                     // --- Iframe Browser UI ---
                     <div className="w-full h-full flex flex-col relative">
-                        {isBlocked(tab.url) ? (
-                            <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 text-center p-8">
-                                <div className="bg-orange-100 p-4 rounded-full mb-6">
-                                    <AlertTriangle size={48} className="text-orange-500" />
-                                </div>
-                                <h2 className="text-xl font-semibold text-gray-800 mb-2">Bu site Com Tarayıcı içinde açılamıyor</h2>
-                                <p className="text-gray-600 max-w-md mb-8">
-                                    <strong>{getDomainFromUrl(tab.url)}</strong> web sitesi, güvenlik politikaları nedeniyle başka bir uygulama içinde çalışmayı (iframe) reddediyor.
-                                </p>
-                                <button 
-                                    onClick={() => window.open(tab.url, '_blank')}
-                                    className={`flex items-center gap-2 ${theme ? theme.primary : 'bg-blue-600'} hover:opacity-90 text-white px-6 py-2.5 rounded-md font-medium transition-colors shadow-sm`}
-                                >
-                                    <ExternalLink size={18} />
-                                    Siteyi Yeni Sekmede Aç
-                                </button>
-                                <p className="text-xs text-gray-400 mt-8">
-                                    İpucu: Araç çubuğundaki <ExternalLink size={10} className="inline mx-1"/> ikonunu kullanarak siteleri her zaman harici açabilirsiniz.
-                                </p>
-                            </div>
+                        {tab.url ? (
+                            <iframe 
+                                src={tab.url} 
+                                className="w-full h-full border-none flex-1" 
+                                title={`Tab ${tab.id}`}
+                                sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-presentation allow-top-navigation-by-user-activation"
+                                referrerPolicy="no-referrer"
+                            />
                         ) : (
-                            <>
-                                {tab.url ? (
-                                    <iframe 
-                                        src={tab.url} 
-                                        className="w-full h-full border-none flex-1" 
-                                        title={`Tab ${tab.id}`}
-                                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
-                                    />
-                                ) : (
-                                     <div className="w-full h-full flex items-center justify-center text-gray-400">
-                                        Yükleniyor...
+                                <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                Yükleniyor...
+                            </div>
+                        )}
+                        
+                        {/* Always show helper because any site might fail in iframe */}
+                        {activeTabId === tab.id && !tab.url.startsWith('com://') && (
+                            <div className="absolute bottom-4 right-4 z-20 group">
+                                    <div className="bg-white/90 backdrop-blur border border-gray-300 shadow-lg rounded-md p-3 flex items-center gap-3 opacity-60 group-hover:opacity-100 transition-opacity">
+                                    <div className="text-xs text-gray-600">
+                                        Site yüklenmiyor mu?
                                     </div>
-                                )}
-                                
-                                {/* Helper for unlisted sites that might still fail */}
-                                {activeTabId === tab.id && !tab.url.startsWith('com://') && !isBlocked(tab.url) && (
-                                    <div className="absolute bottom-4 right-4 z-20 group">
-                                         <div className="bg-white/90 backdrop-blur border border-gray-300 shadow-lg rounded-md p-3 flex items-center gap-3 opacity-60 group-hover:opacity-100 transition-opacity">
-                                            <div className="text-xs text-gray-600">
-                                                Site yüklenmiyor mu?
-                                            </div>
-                                            <button 
-                                                onClick={() => window.open(tab.url, '_blank')}
-                                                className={`text-xs bg-gray-100 hover:bg-gray-200 ${themeText} px-2 py-1 rounded border border-gray-200 flex items-center gap-1`}
-                                            >
-                                                <ExternalLink size={12} />
-                                                Dışarıda Aç
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </>
+                                    <button 
+                                        onClick={() => window.open(tab.url, '_blank')}
+                                        className={`text-xs bg-gray-100 hover:bg-gray-200 ${themeText} px-2 py-1 rounded border border-gray-200 flex items-center gap-1`}
+                                    >
+                                        <ExternalLink size={12} />
+                                        Dışarıda Aç
+                                    </button>
+                                </div>
+                            </div>
                         )}
                     </div>
                 )}

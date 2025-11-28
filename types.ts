@@ -51,3 +51,12 @@ export enum Theme {
   DARK = 'dark',
   LIGHT = 'light'
 }
+
+export interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  app: string;
+  time: string;
+  icon?: ReactNode;
+}

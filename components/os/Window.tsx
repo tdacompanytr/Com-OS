@@ -29,13 +29,14 @@ const Window: React.FC<WindowProps> = ({ windowState, isActive, onClose, onMinim
      // Simulate App Splash Screen
      const timer = setTimeout(() => {
          setIsLoading(false);
-     }, 600); // 600ms splash duration
+     }, 400); // Faster splash
      return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
      if(isDragging) {
         const handleMouseMove = (e: MouseEvent) => {
+           // Direct update for 120Hz feel (no react state lag if possible, but state is fine with duration-0)
            setPosition({
               x: e.clientX - dragOffset.x,
               y: e.clientY - dragOffset.y
@@ -74,12 +75,20 @@ const Window: React.FC<WindowProps> = ({ windowState, isActive, onClose, onMinim
 
   if (windowState.isMinimized) return null;
 
+  // The secret to 120Hz feel:
+  // When dragging: duration-0 (instant response)
+  // When maximizing/restoring: duration-500 + ease-fluid (smooth animation)
+  const transitionClass = isDragging 
+    ? 'transition-none duration-0' 
+    : 'transition-all duration-500 ease-fluid';
+
   return (
     <div
       ref={windowRef}
-      className={`absolute flex flex-col bg-[#1f1f1f] border border-[#333] transition-all duration-200 ease-out origin-center
+      className={`absolute flex flex-col bg-[#1f1f1f] border border-[#333] origin-center gpu-layer
           ${isLoading ? 'scale-95 opacity-0' : 'scale-100 opacity-100'} 
-          ${isActive && !isMaximized ? `shadow-[0_0_20px_rgba(0,0,0,0.5)] ${theme.shadow || 'shadow-blue-500/30'}` : 'shadow-xl'}
+          ${isActive && !isMaximized ? `shadow-[0_0_30px_rgba(0,0,0,0.4)] ${theme.shadow || 'shadow-blue-500/30'}` : 'shadow-xl'}
+          ${transitionClass}
       `}
       style={{
         left: isMaximized ? 0 : position.x,
@@ -87,7 +96,7 @@ const Window: React.FC<WindowProps> = ({ windowState, isActive, onClose, onMinim
         width: isMaximized ? '100%' : size.w,
         height: isMaximized ? 'calc(100% - 40px)' : size.h, // Subtract taskbar height
         zIndex: windowState.zIndex,
-        borderRadius: isMaximized ? 0 : '0.375rem',
+        borderRadius: isMaximized ? 0 : '0.5rem',
         // Dynamic border color for active window
         borderColor: isActive && !isMaximized ? '' : '#333'
       }}
@@ -95,43 +104,43 @@ const Window: React.FC<WindowProps> = ({ windowState, isActive, onClose, onMinim
     >
       {/* Active Border Glow (Extra div to handle exact border coloring) */}
       {isActive && !isMaximized && (
-          <div className={`absolute inset-0 pointer-events-none rounded-md border ${theme.border} opacity-50 z-50`} />
+          <div className={`absolute inset-0 pointer-events-none rounded-lg border ${theme.border} opacity-50 z-50`} />
       )}
 
       {/* Title Bar */}
       <div 
-        className={`h-8 flex items-center justify-between select-none ${isActive ? 'bg-[#2d2d2d]' : 'bg-[#1a1a1a]'} text-white transition-colors duration-200`}
+        className={`h-9 flex items-center justify-between select-none ${isActive ? 'bg-[#252525]' : 'bg-[#1a1a1a]'} text-white transition-colors duration-200 rounded-t-lg`}
         onDoubleClick={toggleMaximize}
       >
         <div 
-            className="flex-1 flex items-center h-full px-3 gap-2 overflow-hidden cursor-default"
+            className="flex-1 flex items-center h-full px-3 gap-3 overflow-hidden cursor-default"
             onMouseDown={handleMouseDown}
         >
             <div className="w-4 h-4">{icon}</div>
-            <span className="text-xs font-normal truncate">{windowState.title}</span>
+            <span className="text-xs font-medium tracking-wide truncate">{windowState.title}</span>
         </div>
         
-        <div className="flex items-center h-full">
-            <button onClick={(e) => { e.stopPropagation(); onMinimize(windowState.id); }} className="h-full w-10 flex items-center justify-center hover:bg-[#3d3d3d] transition-colors">
+        <div className="flex items-center h-full gap-1 pr-1">
+            <button onClick={(e) => { e.stopPropagation(); onMinimize(windowState.id); }} className="h-7 w-9 flex items-center justify-center hover:bg-[#3d3d3d] rounded-md transition-colors">
                 <Minus size={14} />
             </button>
-            <button onClick={(e) => { e.stopPropagation(); toggleMaximize(); }} className="h-full w-10 flex items-center justify-center hover:bg-[#3d3d3d] transition-colors">
+            <button onClick={(e) => { e.stopPropagation(); toggleMaximize(); }} className="h-7 w-9 flex items-center justify-center hover:bg-[#3d3d3d] rounded-md transition-colors">
                 {isMaximized ? <Maximize2 size={12} /> : <Square size={12} />}
             </button>
-            <button onClick={(e) => { e.stopPropagation(); onClose(windowState.id); }} className="h-full w-10 flex items-center justify-center hover:bg-red-600 transition-colors">
-                <X size={14} />
+            <button onClick={(e) => { e.stopPropagation(); onClose(windowState.id); }} className="h-7 w-9 flex items-center justify-center hover:bg-red-600 rounded-md transition-colors group">
+                <X size={14} className="group-active:scale-90 transition-transform" />
             </button>
         </div>
       </div>
 
       {/* Window Content */}
-      <div className="flex-1 relative overflow-hidden bg-white">
+      <div className="flex-1 relative overflow-hidden bg-white rounded-b-lg">
           {isLoading ? (
              <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1f1f1f] z-10 animate-in fade-in duration-300">
-                 <div className="scale-150 mb-4 animate-bounce duration-[2000ms]">{icon}</div>
+                 <div className="scale-150 mb-4 animate-bounce duration-[1000ms]">{icon}</div>
              </div>
           ) : (
-             <div className="w-full h-full animate-in fade-in zoom-in-95 duration-300">
+             <div className="w-full h-full animate-in fade-in zoom-in-95 duration-500 ease-fluid">
                 {children}
              </div>
           )}

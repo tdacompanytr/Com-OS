@@ -1,10 +1,14 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { WALLPAPER_URL, APP_REGISTRY, GameIcon, PRESET_WALLPAPERS, THEMES } from './constants';
-import { WindowState, AppId, MarketItem, ThemeConfig } from './types';
+import { WindowState, AppId, MarketItem, ThemeConfig, Notification } from './types';
 import Taskbar from './components/os/Taskbar';
 import StartMenu from './components/os/StartMenu';
 import Window from './components/os/Window';
 import BootScreen from './components/os/BootScreen';
+import LockScreen from './components/os/LockScreen';
+import ActionCenter from './components/os/ActionCenter';
+import CalendarFlyout from './components/os/CalendarFlyout';
+
 import MarketApp from './components/apps/Market';
 import BrowserApp from './components/apps/Browser';
 import AssistantApp from './components/apps/Assistant';
@@ -17,7 +21,7 @@ import MusicPlayer from './components/apps/MusicPlayer';
 import { 
   Monitor, Printer, Smartphone, Globe, 
   Palette, LayoutGrid, User, Clock, Gamepad2, Search, ArrowLeft, Image as ImageIcon, Upload, Construction,
-  Volume2, Battery, Wifi, Bluetooth, HardDrive, Cpu, Shield, MapPin, Trash2, Check, FolderClosed, RefreshCw
+  Volume2, Battery, Wifi, Bluetooth, HardDrive, Cpu, Shield, MapPin, Trash2, Check, FolderClosed, RefreshCw, Terminal, Key, Lock
 } from 'lucide-react';
 
 interface SettingsAppProps {
@@ -27,6 +31,8 @@ interface SettingsAppProps {
   onUninstallGame: (id: string) => void;
   currentTheme: ThemeConfig;
   onSetTheme: (theme: ThemeConfig) => void;
+  storedPassword?: string;
+  onSetPassword: (pass: string) => void;
 }
 
 // Reusable Toggle Component
@@ -39,7 +45,10 @@ const Toggle: React.FC<{ checked: boolean; onChange: () => void; activeClass?: s
   </div>
 );
 
-const SettingsApp: React.FC<SettingsAppProps> = ({ currentWallpaper, onSetWallpaper, installedGames, onUninstallGame, currentTheme, onSetTheme }) => {
+const SettingsApp: React.FC<SettingsAppProps> = ({ 
+    currentWallpaper, onSetWallpaper, installedGames, onUninstallGame, currentTheme, onSetTheme,
+    storedPassword, onSetPassword
+}) => {
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -52,6 +61,11 @@ const SettingsApp: React.FC<SettingsAppProps> = ({ currentWallpaper, onSetWallpa
   const [gameMode, setGameMode] = useState(true);
   const [nightLight, setNightLight] = useState(false);
 
+  // Password Input States
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [passError, setPassError] = useState('');
+
   const settingsItems: { name: string; icon: React.ReactNode; desc: string }[] = [
       { name: 'Sistem', icon: <Monitor size={24} />, desc: 'Ekran, ses, güç' },
       { name: 'Cihazlar', icon: <Printer size={24} />, desc: 'Bluetooth, yazıcılar, fare' },
@@ -62,6 +76,7 @@ const SettingsApp: React.FC<SettingsAppProps> = ({ currentWallpaper, onSetWallpa
       { name: 'Hesaplar', icon: <User size={24} />, desc: 'Hesaplarınız, e-posta, senkronizasyon' },
       { name: 'Zaman ve Dil', icon: <Clock size={24} />, desc: 'Konuşma, bölge, tarih' },
       { name: 'Oyun', icon: <Gamepad2 size={24} />, desc: 'Oyun Modu, yakalamalar' },
+      { name: 'Güvenlik', icon: <Shield size={24} />, desc: 'Parola, kilit ekranı güvenliği' },
   ];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,6 +85,21 @@ const SettingsApp: React.FC<SettingsAppProps> = ({ currentWallpaper, onSetWallpa
       const imageUrl = URL.createObjectURL(file);
       onSetWallpaper(imageUrl);
     }
+  };
+
+  const handleSavePass = () => {
+      if (newPass.length < 4) {
+          setPassError('Parola en az 4 karakter olmalıdır.');
+          return;
+      }
+      if (newPass !== confirmPass) {
+          setPassError('Parolalar eşleşmiyor.');
+          return;
+      }
+      onSetPassword(newPass);
+      setNewPass('');
+      setConfirmPass('');
+      setPassError('');
   };
 
   const renderContent = () => {
@@ -303,6 +333,71 @@ const SettingsApp: React.FC<SettingsAppProps> = ({ currentWallpaper, onSetWallpa
                  </div>
             );
 
+        case 'Güvenlik':
+            return (
+                 <div className="animate-in fade-in slide-in-from-right-4 duration-200 space-y-6">
+                     <h2 className="text-xl font-light mb-4">Oturum Açma Seçenekleri</h2>
+                     
+                     <div className="bg-[#2d2d2d] p-6 rounded-sm">
+                        <div className="flex items-start gap-4 mb-6">
+                            <div className="p-3 bg-[#333] rounded-full"><Key size={24} /></div>
+                            <div>
+                                <h3 className="text-lg font-medium">Parola</h3>
+                                <p className="text-sm text-gray-400">Hesabınızın güvenliği için bir parola kullanın.</p>
+                            </div>
+                        </div>
+
+                        {storedPassword ? (
+                             <div className="space-y-4">
+                                <div className="bg-green-900/30 border border-green-800 p-3 rounded text-sm text-green-400 flex items-center gap-2">
+                                     <Check size={16} /> Parolanız ayarlandı.
+                                </div>
+                                <button 
+                                    onClick={() => onSetPassword('')}
+                                    className="bg-[#333] hover:bg-red-900/50 hover:text-red-400 border border-gray-600 px-4 py-2 rounded-sm text-sm transition-colors"
+                                >
+                                    Parolayı Kaldır
+                                </button>
+                             </div>
+                        ) : (
+                            <div className="space-y-3 max-w-sm">
+                                <input 
+                                    type="password" 
+                                    placeholder="Yeni Parola" 
+                                    className="w-full bg-[#1a1a1a] border border-gray-600 p-2 text-sm focus:border-blue-500 outline-none"
+                                    value={newPass}
+                                    onChange={e => setNewPass(e.target.value)}
+                                />
+                                 <input 
+                                    type="password" 
+                                    placeholder="Parolayı Onayla" 
+                                    className="w-full bg-[#1a1a1a] border border-gray-600 p-2 text-sm focus:border-blue-500 outline-none"
+                                    value={confirmPass}
+                                    onChange={e => setConfirmPass(e.target.value)}
+                                />
+                                <button 
+                                    onClick={handleSavePass}
+                                    className={`${currentTheme.primary} ${currentTheme.hover} text-white px-6 py-2 rounded-sm text-sm`}
+                                >
+                                    Oluştur
+                                </button>
+                                {passError && <p className="text-red-400 text-xs">{passError}</p>}
+                            </div>
+                        )}
+                     </div>
+
+                     <div className="bg-[#2d2d2d] p-6 rounded-sm opacity-50 cursor-not-allowed">
+                        <div className="flex items-start gap-4">
+                            <div className="p-3 bg-[#333] rounded-full"><Lock size={24} /></div>
+                            <div>
+                                <h3 className="text-lg font-medium">Dinamik Kilit</h3>
+                                <p className="text-sm text-gray-400">Uzaklaştığınızda Windows'un cihazınızı otomatik olarak kilitlemesine izin verin.</p>
+                            </div>
+                        </div>
+                     </div>
+                 </div>
+            );
+
         case 'Zaman ve Dil':
              return (
                 <div className="animate-in fade-in slide-in-from-right-4 duration-200 space-y-6">
@@ -479,7 +574,7 @@ const SettingsApp: React.FC<SettingsAppProps> = ({ currentWallpaper, onSetWallpa
         
         {!activeSection && (
             <div className="mt-8 text-center text-xs text-gray-600">
-                <p>Com OS Sürüm 21H2 (Tda Company Edition)</p>
+                <p>Com OS Sürüm 2.0 (Tda Company Edition)</p>
                 <p>&copy; 2024 Tda Company. Tüm hakları saklıdır.</p>
             </div>
         )}
@@ -492,14 +587,33 @@ const App: React.FC = () => {
   const [windows, setWindows] = useState<WindowState[]>([]);
   const [activeWindowId, setActiveWindowId] = useState<string | null>(null);
   const [isStartOpen, setIsStartOpen] = useState(false);
+  const [isActionCenterOpen, setIsActionCenterOpen] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [nextZIndex, setNextZIndex] = useState(100);
   const [wallpaper, setWallpaper] = useState(WALLPAPER_URL);
   const [currentTheme, setCurrentTheme] = useState<ThemeConfig>(THEMES.blue);
   
   // System State
   const [isBooted, setIsBooted] = useState(false);
+  const [isLocked, setIsLocked] = useState(true); // Default to locked after boot
   const [isShuttingDown, setIsShuttingDown] = useState(false);
   const [contextMenu, setContextMenu] = useState<{x: number, y: number} | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([
+      { id: '1', title: 'Hoşgeldiniz', message: 'Com OS 2.0 sürümüne başarıyla güncellendi.', app: 'Sistem', time: 'Şimdi', icon: <Terminal size={14} /> }
+  ]);
+  const [toggleSettings, setToggleSettings] = useState({ wifi: true, bluetooth: true, airplane: false, nightLight: false });
+  
+  // Password State
+  const [storedPassword, setStoredPassword] = useState(localStorage.getItem('com_os_pwd') || '');
+
+  const handleSetPassword = (pass: string) => {
+      if (pass) {
+          localStorage.setItem('com_os_pwd', pass);
+      } else {
+          localStorage.removeItem('com_os_pwd');
+      }
+      setStoredPassword(pass);
+  };
   
   // Store installed games as { id: 'game-123', item: MarketItem }
   const [installedGames, setInstalledGames] = useState<Record<string, MarketItem>>({});
@@ -510,6 +624,15 @@ const App: React.FC = () => {
         ...prev,
         [appId]: item
     }));
+    // Add Notification
+    setNotifications(prev => [{
+        id: Date.now().toString(),
+        title: 'Kurulum Tamamlandı',
+        message: `${item.name} oynamaya hazır.`,
+        app: 'Mağaza',
+        time: 'Şimdi',
+        icon: <GameIcon />
+    }, ...prev]);
   };
 
   const handleUninstallGame = (gameId: string) => {
@@ -551,7 +674,7 @@ const App: React.FC = () => {
       case 'video': return <VideoPlayer file={data} theme={currentTheme} />;
       case 'music': return <MusicPlayer file={data} theme={currentTheme} />;
       case 'explorer': return <ExplorerApp theme={currentTheme} onOpenApp={(id, data) => openApp(id, undefined, data)} />;
-      case 'settings': return <SettingsApp currentWallpaper={wallpaper} onSetWallpaper={setWallpaper} installedGames={installedGames} onUninstallGame={handleUninstallGame} currentTheme={currentTheme} onSetTheme={setCurrentTheme} />;
+      case 'settings': return <SettingsApp currentWallpaper={wallpaper} onSetWallpaper={setWallpaper} installedGames={installedGames} onUninstallGame={handleUninstallGame} currentTheme={currentTheme} onSetTheme={setCurrentTheme} storedPassword={storedPassword} onSetPassword={handleSetPassword} />;
       default: return <div className="p-4 text-white">Uygulama yükleniyor...</div>;
     }
   };
@@ -601,6 +724,7 @@ const App: React.FC = () => {
     setNextZIndex(z => z + 1);
     setActiveWindowId(newId);
     setIsStartOpen(false);
+    setIsActionCenterOpen(false);
   }, [windows.length, nextZIndex, activeWindowId, dynamicRegistry]);
 
   const closeWindow = (id: string) => {
@@ -659,15 +783,14 @@ const App: React.FC = () => {
     }
   };
 
-  // Effect to trigger sound on boot
+  // Effect to trigger sound on boot (only when entering lock screen initially)
   useEffect(() => {
-    if (isBooted) {
-      // Small delay to ensure UI is visible first
+    if (isBooted && isLocked) {
       setTimeout(() => {
         playStartupSound();
       }, 500);
     }
-  }, [isBooted]);
+  }, [isBooted, isLocked]);
 
   // Keyboard Shortcuts
   useEffect(() => {
@@ -702,11 +825,21 @@ const App: React.FC = () => {
         setActiveWindowId(null);
         setIsShuttingDown(false);
         setIsBooted(false); // Return to boot/bios state
+        setIsLocked(true); // Reset lock state for next boot
     }, 3000);
+  };
+
+  const handleUnlock = () => {
+      setIsLocked(false);
   };
 
   if (!isBooted) {
       return <BootScreen onBootComplete={() => setIsBooted(true)} />;
+  }
+
+  // Lock Screen Overlay
+  if (isLocked) {
+      return <LockScreen onUnlock={handleUnlock} wallpaper={wallpaper} theme={currentTheme} password={storedPassword} />;
   }
 
   return (
@@ -722,7 +855,12 @@ const App: React.FC = () => {
         <div 
             className="w-full h-full relative overflow-hidden bg-cover bg-center select-none transition-all duration-500"
             style={{ backgroundImage: `url(${wallpaper})` }}
-            onClick={() => { if(isStartOpen) setIsStartOpen(false); setContextMenu(null); }}
+            onClick={() => { 
+                if(isStartOpen) setIsStartOpen(false); 
+                if(isActionCenterOpen) setIsActionCenterOpen(false);
+                if(isCalendarOpen) setIsCalendarOpen(false);
+                setContextMenu(null); 
+            }}
             onContextMenu={handleDesktopRightClick}
         >
         {/* Desktop Icons Area */}
@@ -799,15 +937,45 @@ const App: React.FC = () => {
             registry={dynamicRegistry}
             theme={currentTheme}
         />
+
+        <ActionCenter 
+            isOpen={isActionCenterOpen}
+            onClose={() => setIsActionCenterOpen(false)}
+            notifications={notifications}
+            onClearAll={() => setNotifications([])}
+            theme={currentTheme}
+            toggleSettings={toggleSettings}
+            onToggle={(key) => setToggleSettings(prev => ({...prev, [key]: !prev[key as keyof typeof toggleSettings]}))}
+        />
+
+        <CalendarFlyout 
+            isOpen={isCalendarOpen}
+            theme={currentTheme}
+        />
         
         <Taskbar 
             openWindows={windows} 
             activeWindowId={activeWindowId} 
             onAppClick={openApp}
-            onToggleStart={() => setIsStartOpen(!isStartOpen)}
+            onToggleStart={() => {
+                setIsStartOpen(!isStartOpen);
+                setIsActionCenterOpen(false);
+                setIsCalendarOpen(false);
+            }}
             isStartOpen={isStartOpen}
             registry={dynamicRegistry}
             theme={currentTheme}
+            onToggleActionCenter={() => {
+                setIsActionCenterOpen(!isActionCenterOpen);
+                setIsStartOpen(false);
+                setIsCalendarOpen(false);
+            }}
+            onToggleCalendar={() => {
+                setIsCalendarOpen(!isCalendarOpen);
+                setIsStartOpen(false);
+                setIsActionCenterOpen(false);
+            }}
+            hasNotifications={notifications.length > 0}
         />
         </div>
     </>
