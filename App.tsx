@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { WALLPAPER_URL, APP_REGISTRY, GameIcon, PRESET_WALLPAPERS, THEMES } from './constants';
-import { WindowState, AppId, MarketItem, ThemeConfig, Notification } from './types';
+import { WindowState, AppId, MarketItem, ThemeConfig, Notification, DesktopItem, ViewMode, SortMode } from './types';
 import Taskbar from './components/os/Taskbar';
 import StartMenu from './components/os/StartMenu';
 import Window from './components/os/Window';
@@ -10,7 +10,6 @@ import ActionCenter from './components/os/ActionCenter';
 import CalendarFlyout from './components/os/CalendarFlyout';
 
 import MarketApp from './components/apps/Market';
-import BrowserApp from './components/apps/Browser';
 import AssistantApp from './components/apps/Assistant';
 import CalculatorApp from './components/apps/Calculator';
 import NotepadApp from './components/apps/Notepad';
@@ -21,7 +20,8 @@ import MusicPlayer from './components/apps/MusicPlayer';
 import { 
   Monitor, Printer, Smartphone, Globe, 
   Palette, LayoutGrid, User, Clock, Gamepad2, Search, ArrowLeft, Image as ImageIcon, Upload, Construction,
-  Volume2, Battery, Wifi, Bluetooth, HardDrive, Cpu, Shield, MapPin, Trash2, Check, FolderClosed, RefreshCw, Terminal, Key, Lock
+  Volume2, Battery, Wifi, Bluetooth, HardDrive, Cpu, Shield, MapPin, Trash2, Check, FolderClosed, RefreshCw, Terminal, Key, Lock, Pin, FileText,
+  ChevronRight, Circle, CheckCircle2, FilePlus, FolderPlus
 } from 'lucide-react';
 
 interface SettingsAppProps {
@@ -33,7 +33,67 @@ interface SettingsAppProps {
   onSetTheme: (theme: ThemeConfig) => void;
   storedPassword?: string;
   onSetPassword: (pass: string) => void;
+  defaultSection?: string | null;
 }
+
+// File System Type Definition
+export interface FileSystemItem {
+    name: string;
+    type: 'folder' | 'file' | 'drive';
+    icon?: any;
+    size?: string;
+    url?: string;
+    content?: string; // Content for text files
+}
+
+// Initial File System Data (Moved from Explorer)
+const INITIAL_FILE_SYSTEM: Record<string, FileSystemItem[]> = {
+    'Bu Bilgisayar': [
+        { name: 'Yerel Disk (C:)', type: 'drive', size: '120 GB boş' },
+        { name: 'Masaüstü', type: 'folder' },
+        { name: 'Belgeler', type: 'folder' },
+        { name: 'İndirilenler', type: 'folder' },
+        { name: 'Resimler', type: 'folder' },
+        { name: 'Müzik', type: 'folder' },
+        { name: 'Çöp Kutusu', type: 'folder' },
+    ],
+    'Yerel Disk (C:)': [
+        { name: 'Windows', type: 'folder' },
+        { name: 'Program Files', type: 'folder' },
+        { name: 'Users', type: 'folder' },
+        { name: 'ComOS_Logs.txt', type: 'file', size: '2 KB', content: 'System initialized successfully.\nBoot time: 14s\nAll services running.' },
+        { name: 'Swapfile.sys', type: 'file', size: '2.5 GB' },
+    ],
+    'Belgeler': [
+        { name: 'Ödevler', type: 'folder' },
+        { name: 'Proje Notları.txt', type: 'file', size: '14 KB', content: 'Proje Bitiş Tarihi: 28 Kasım\n\nYapılacaklar:\n- Arayüz Tasarımı\n- Backend Entegrasyonu' },
+        { name: 'Özgeçmiş.docx', type: 'file', size: '450 KB' },
+        { name: 'Mali Tablo.xlsx', type: 'file', size: '2.1 MB' },
+    ],
+    'Resimler': [
+        { name: 'Tatil', type: 'folder' },
+        { name: 'Profil.jpg', type: 'file', size: '2.4 MB' },
+        { name: 'Manzara.png', type: 'file', size: '4.1 MB' },
+        { name: 'Ekran Görüntüsü.png', type: 'file', size: '500 KB' },
+    ],
+    'İndirilenler': [
+        { name: 'BigBuckBunny.mp4', type: 'file', size: '158 MB', url: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4' },
+        { name: 'odev.zip', type: 'file', size: '12 MB' },
+        { name: 'Film_Fragman.mkv', type: 'file', size: '120 MB', url: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4' },
+    ],
+    'Müzik': [
+        { name: 'Pop Listesi', type: 'folder' },
+        { name: 'Jazz_Vibes.mp3', type: 'file', size: '4.5 MB', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' },
+        { name: 'Ambient_Relax.wav', type: 'file', size: '12 MB', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3' },
+    ],
+    'Masaüstü': [
+        { name: 'Dosyalarım', type: 'folder' },
+        { name: 'Kısayol.lnk', type: 'file', size: '1 KB' },
+        { name: 'Yapılacaklar.txt', type: 'file', size: '2 KB', content: '1. Markete git\n2. Süt al\n3. Com OS güncellemesini yap' },
+        { name: 'Demo_Video.mp4', type: 'file', size: '50 MB', url: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4' }
+    ],
+    'Çöp Kutusu': []
+};
 
 // Reusable Toggle Component
 const Toggle: React.FC<{ checked: boolean; onChange: () => void; activeClass?: string }> = ({ checked, onChange, activeClass = 'bg-blue-600' }) => (
@@ -47,10 +107,15 @@ const Toggle: React.FC<{ checked: boolean; onChange: () => void; activeClass?: s
 
 const SettingsApp: React.FC<SettingsAppProps> = ({ 
     currentWallpaper, onSetWallpaper, installedGames, onUninstallGame, currentTheme, onSetTheme,
-    storedPassword, onSetPassword
+    storedPassword, onSetPassword, defaultSection
 }) => {
-  const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<string | null>(defaultSection || null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Update active section if defaultSection changes (e.g. from context menu)
+  useEffect(() => {
+      if(defaultSection) setActiveSection(defaultSection);
+  }, [defaultSection]);
   
   // Settings States
   const [wifiEnabled, setWifiEnabled] = useState(true);
@@ -154,373 +219,104 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
                     </div>
                 </div>
             );
-
-        case 'Cihazlar':
-            return (
-                <div className="animate-in fade-in slide-in-from-right-4 duration-200 space-y-6">
-                     <div className="flex justify-between items-center bg-[#2d2d2d] p-4 rounded-sm">
-                         <div className="flex items-center gap-3">
-                             <Bluetooth className={currentTheme.text} />
-                             <div>
-                                 <div className="font-medium">Bluetooth</div>
-                                 <div className="text-xs text-gray-400">{bluetoothEnabled ? 'Şimdi bulunabilir: "Com-PC"' : 'Kapalı'}</div>
-                             </div>
-                         </div>
-                         <Toggle checked={bluetoothEnabled} onChange={() => setBluetoothEnabled(!bluetoothEnabled)} activeClass={currentTheme.primary} />
-                     </div>
-
-                     <div>
-                         <h3 className="text-sm font-semibold text-gray-400 mb-2 uppercase">Fare, Klavye ve Kalem</h3>
-                         <div className="space-y-1">
-                             <div className="bg-[#252525] p-3 flex items-center gap-3 rounded-sm">
-                                 <div className="w-8 h-8 flex items-center justify-center bg-[#333] rounded"><Printer size={16} /></div>
-                                 <div>
-                                     <div className="text-sm">Com Optik Fare</div>
-                                     <div className="text-xs text-green-500">Bağlı</div>
-                                 </div>
-                             </div>
-                             <div className="bg-[#252525] p-3 flex items-center gap-3 rounded-sm">
-                                 <div className="w-8 h-8 flex items-center justify-center bg-[#333] rounded"><LayoutGrid size={16} /></div>
-                                 <div>
-                                     <div className="text-sm">Com Mekanik Klavye</div>
-                                     <div className="text-xs text-green-500">Bağlı</div>
-                                 </div>
-                             </div>
-                         </div>
-                     </div>
-                </div>
-            );
-
-        case 'Telefon':
-            return (
-                <div className="animate-in fade-in slide-in-from-right-4 duration-200 flex flex-col items-center pt-10 text-center">
-                    <div className={`w-24 h-24 ${currentTheme.primary} rounded-full flex items-center justify-center mb-6`}>
-                        <Smartphone size={48} className="text-white" />
-                    </div>
-                    <h2 className="text-2xl font-light mb-2">Telefonunuz</h2>
-                    <p className="text-gray-400 max-w-md mb-8">
-                        Android veya iPhone'unuzu bilgisayarınıza bağlayın. Fotoğraflarınıza, mesajlarınıza ve daha fazlasına anında erişin.
-                    </p>
-                    <button className={`${currentTheme.primary} ${currentTheme.hover} text-white px-8 py-2 rounded-sm transition-colors`}>
-                        Telefon ekle
-                    </button>
-                </div>
-            );
-
-        case 'Ağ ve İnternet':
-            return (
-                <div className="animate-in fade-in slide-in-from-right-4 duration-200 space-y-6">
-                    <div className="flex flex-col items-center mb-8">
-                        <div className={`w-32 h-32 rounded-full border-4 flex items-center justify-center mb-4 transition-colors ${wifiEnabled ? `border-green-500 text-green-500` : 'border-gray-600 text-gray-600'}`}>
-                            <Globe size={64} />
-                        </div>
-                        <h2 className="text-xl">{wifiEnabled ? 'İnternete bağlısınız' : 'İnternet bağlantısı yok'}</h2>
-                        <p className="text-sm text-gray-400">{wifiEnabled ? 'ComNet-5G ağına bağlı, güvenli' : 'Wi-Fi kapalı'}</p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="bg-[#2d2d2d] p-4 rounded-sm flex justify-between items-center">
-                            <div className="flex items-center gap-3">
-                                <Wifi />
-                                <span>Wi-Fi</span>
-                            </div>
-                            <Toggle checked={wifiEnabled} onChange={() => setWifiEnabled(!wifiEnabled)} activeClass={currentTheme.primary} />
-                        </div>
-                         <div className="bg-[#2d2d2d] p-4 rounded-sm flex justify-between items-center">
-                            <div className="flex items-center gap-3">
-                                <div className="rotate-90"><Smartphone /></div>
-                                <span>Uçak Modu</span>
-                            </div>
-                            <Toggle checked={airplaneMode} onChange={() => setAirplaneMode(!airplaneMode)} activeClass={currentTheme.primary} />
-                        </div>
-                    </div>
-
-                    {wifiEnabled && (
-                        <div className="bg-[#2d2d2d] p-4 rounded-sm space-y-2">
-                            <h3 className="font-medium text-gray-300 border-b border-gray-600 pb-2 mb-2">Özellikler</h3>
-                            <div className="flex justify-between text-sm">
-                                <span className="text-gray-400">SSID:</span>
-                                <span>ComNet-5G</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                                <span className="text-gray-400">Protokol:</span>
-                                <span>Wi-Fi 6 (802.11ax)</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                                <span className="text-gray-400">IP Adresi:</span>
-                                <span>192.168.1.105</span>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            );
-
-        case 'Uygulamalar':
-            return (
-                <div className="animate-in fade-in slide-in-from-right-4 duration-200">
-                    <h2 className="text-xl font-light mb-6">Uygulamalar ve Özellikler</h2>
-                    <div className="bg-[#2d2d2d] p-2 rounded-sm mb-4 flex items-center">
-                        <Search className="text-gray-400 ml-2" size={16} />
-                        <input type="text" placeholder="Bu listeyi ara" className="bg-transparent border-none outline-none ml-3 text-sm w-full text-white placeholder-gray-500" />
-                    </div>
-
-                    <div className="space-y-1">
-                        {/* System Apps */}
-                        {Object.values(APP_REGISTRY).map((app, i) => (
-                             <div key={i} className="bg-[#252525] p-3 flex items-center justify-between rounded-sm group hover:bg-[#2f2f2f]">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 p-1 bg-[#333] rounded">{app.icon}</div>
-                                    <div>
-                                        <div className="text-sm font-medium">{app.title}</div>
-                                        <div className="text-xs text-gray-500">Tda Company • 12.0 MB</div>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-
-                        {/* Installed Games */}
-                        {Object.entries(installedGames).map(([key, item]) => (
-                             <div key={key} className="bg-[#252525] p-3 flex items-center justify-between rounded-sm group hover:bg-[#2f2f2f]">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 p-1 bg-[#333] rounded ${currentTheme.text}`}><GameIcon /></div>
-                                    <div>
-                                        <div className="text-sm font-medium">{item.name}</div>
-                                        <div className="text-xs text-gray-500">Com Store • {item.category}</div>
-                                    </div>
-                                </div>
-                                <button 
-                                    onClick={() => onUninstallGame(key)}
-                                    className="px-3 py-1 bg-[#333] hover:bg-red-900/50 hover:text-red-400 text-xs rounded transition-colors"
-                                >
-                                    Kaldır
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            );
-
-        case 'Hesaplar':
-            return (
-                 <div className="animate-in fade-in slide-in-from-right-4 duration-200">
-                    <div className="flex items-center gap-6 mb-8">
-                        <div className="w-24 h-24 bg-gray-600 rounded-full flex items-center justify-center text-3xl font-light border-4 border-[#333]">
-                            TK
-                        </div>
-                        <div>
-                            <h2 className="text-2xl font-medium">Tda Kullanıcısı</h2>
-                            <p className="text-gray-400">user@com-os.local</p>
-                            <p className={`${currentTheme.text} text-sm mt-1`}>Yönetici</p>
-                        </div>
-                    </div>
-
-                    <div className="space-y-1">
-                         <div className="bg-[#2d2d2d] p-4 rounded-sm flex items-center gap-4 hover:bg-[#333] cursor-pointer">
-                             <Shield size={20} />
-                             <div>
-                                 <div className="text-sm">Oturum açma seçenekleri</div>
-                                 <div className="text-xs text-gray-500">Windows Hello, Güvenlik Anahtarı, Parola</div>
-                             </div>
-                         </div>
-                         <div className="bg-[#2d2d2d] p-4 rounded-sm flex items-center gap-4 hover:bg-[#333] cursor-pointer">
-                             <User size={20} />
-                             <div>
-                                 <div className="text-sm">Bilgileriniz</div>
-                                 <div className="text-xs text-gray-500">Profil resmi ve hesap ayarları</div>
-                             </div>
-                         </div>
-                    </div>
-                 </div>
-            );
-
         case 'Güvenlik':
             return (
-                 <div className="animate-in fade-in slide-in-from-right-4 duration-200 space-y-6">
-                     <h2 className="text-xl font-light mb-4">Oturum Açma Seçenekleri</h2>
-                     
-                     <div className="bg-[#2d2d2d] p-6 rounded-sm">
-                        <div className="flex items-start gap-4 mb-6">
-                            <div className="p-3 bg-[#333] rounded-full"><Key size={24} /></div>
-                            <div>
-                                <h3 className="text-lg font-medium">Parola</h3>
-                                <p className="text-sm text-gray-400">Hesabınızın güvenliği için bir parola kullanın.</p>
-                            </div>
+                <div className="animate-in fade-in slide-in-from-right-4 duration-200 space-y-8">
+                    <div>
+                        <h2 className="text-xl font-light mb-4">Oturum Açma Seçenekleri</h2>
+                        <div className="bg-[#2d2d2d] p-4 rounded-sm space-y-4">
+                             <div className="flex items-start gap-4">
+                                 <div className="bg-[#333] p-3 rounded-full"><Lock size={24} className="text-gray-300" /></div>
+                                 <div className="flex-1">
+                                     <div className="font-medium mb-1">Parola</div>
+                                     <div className="text-xs text-gray-400 mb-4">Kilit ekranı için bir parola belirleyin.</div>
+                                     
+                                     {storedPassword ? (
+                                         <div className="flex items-center gap-4">
+                                             <span className="text-green-500 text-sm flex items-center gap-1"><Check size={14} /> Parola aktif</span>
+                                             <button 
+                                                onClick={() => onSetPassword('')}
+                                                className="px-4 py-1.5 bg-red-600 hover:bg-red-700 rounded text-xs font-medium transition-colors"
+                                             >
+                                                 Kaldır
+                                             </button>
+                                         </div>
+                                     ) : (
+                                         <div className="space-y-3 max-w-sm">
+                                             <input 
+                                                type="password" 
+                                                placeholder="Yeni Parola" 
+                                                className="w-full bg-[#1a1a1a] border border-[#444] p-2 rounded text-sm focus:border-blue-500 outline-none"
+                                                value={newPass}
+                                                onChange={e => setNewPass(e.target.value)}
+                                             />
+                                             <input 
+                                                type="password" 
+                                                placeholder="Parolayı Onayla" 
+                                                className="w-full bg-[#1a1a1a] border border-[#444] p-2 rounded text-sm focus:border-blue-500 outline-none"
+                                                value={confirmPass}
+                                                onChange={e => setConfirmPass(e.target.value)}
+                                             />
+                                             {passError && <div className="text-red-500 text-xs">{passError}</div>}
+                                             <button 
+                                                onClick={handleSavePass}
+                                                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-xs font-medium transition-colors"
+                                             >
+                                                 Kaydet
+                                             </button>
+                                         </div>
+                                     )}
+                                 </div>
+                             </div>
                         </div>
-
-                        {storedPassword ? (
-                             <div className="space-y-4">
-                                <div className="bg-green-900/30 border border-green-800 p-3 rounded text-sm text-green-400 flex items-center gap-2">
-                                     <Check size={16} /> Parolanız ayarlandı.
-                                </div>
-                                <button 
-                                    onClick={() => onSetPassword('')}
-                                    className="bg-[#333] hover:bg-red-900/50 hover:text-red-400 border border-gray-600 px-4 py-2 rounded-sm text-sm transition-colors"
-                                >
-                                    Parolayı Kaldır
-                                </button>
-                             </div>
-                        ) : (
-                            <div className="space-y-3 max-w-sm">
-                                <input 
-                                    type="password" 
-                                    placeholder="Yeni Parola" 
-                                    className="w-full bg-[#1a1a1a] border border-gray-600 p-2 text-sm focus:border-blue-500 outline-none"
-                                    value={newPass}
-                                    onChange={e => setNewPass(e.target.value)}
-                                />
-                                 <input 
-                                    type="password" 
-                                    placeholder="Parolayı Onayla" 
-                                    className="w-full bg-[#1a1a1a] border border-gray-600 p-2 text-sm focus:border-blue-500 outline-none"
-                                    value={confirmPass}
-                                    onChange={e => setConfirmPass(e.target.value)}
-                                />
-                                <button 
-                                    onClick={handleSavePass}
-                                    className={`${currentTheme.primary} ${currentTheme.hover} text-white px-6 py-2 rounded-sm text-sm`}
-                                >
-                                    Oluştur
-                                </button>
-                                {passError && <p className="text-red-400 text-xs">{passError}</p>}
-                            </div>
-                        )}
-                     </div>
-
-                     <div className="bg-[#2d2d2d] p-6 rounded-sm opacity-50 cursor-not-allowed">
-                        <div className="flex items-start gap-4">
-                            <div className="p-3 bg-[#333] rounded-full"><Lock size={24} /></div>
-                            <div>
-                                <h3 className="text-lg font-medium">Dinamik Kilit</h3>
-                                <p className="text-sm text-gray-400">Uzaklaştığınızda Windows'un cihazınızı otomatik olarak kilitlemesine izin verin.</p>
-                            </div>
-                        </div>
-                     </div>
-                 </div>
-            );
-
-        case 'Zaman ve Dil':
-             return (
-                <div className="animate-in fade-in slide-in-from-right-4 duration-200 space-y-6">
-                     <div className="bg-[#2d2d2d] p-6 rounded-sm text-center">
-                         <div className="text-4xl font-light mb-2">
-                             {new Date().toLocaleTimeString('tr-TR', {hour: '2-digit', minute:'2-digit'})}
-                         </div>
-                         <div className="text-gray-400">
-                             {new Date().toLocaleDateString('tr-TR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                         </div>
-                     </div>
-
-                     <div className="space-y-4">
-                         <div className="flex justify-between items-center">
-                             <div>
-                                 <div className="font-medium">Saati otomatik ayarla</div>
-                             </div>
-                             <Toggle checked={true} onChange={() => {}} activeClass={currentTheme.primary} />
-                         </div>
-                         <div className="flex justify-between items-center opacity-50">
-                             <div>
-                                 <div className="font-medium">Saat dilimini otomatik ayarla</div>
-                             </div>
-                             <Toggle checked={false} onChange={() => {}} activeClass={currentTheme.primary} />
-                         </div>
-                     </div>
+                    </div>
                 </div>
-             );
-
-        case 'Oyun':
-             return (
-                 <div className="animate-in fade-in slide-in-from-right-4 duration-200 space-y-6">
-                      <div className="flex justify-between items-center bg-[#2d2d2d] p-4 rounded-sm">
-                         <div className="flex items-center gap-3">
-                             <Gamepad2 className="text-green-500" />
-                             <div>
-                                 <div className="font-medium">Oyun Modu</div>
-                                 <div className="text-xs text-gray-400">Bilgisayarı oyun için en iyi duruma getir</div>
-                             </div>
-                         </div>
-                         <Toggle checked={gameMode} onChange={() => setGameMode(!gameMode)} activeClass={currentTheme.primary} />
-                     </div>
-                 </div>
-             );
-
-        // 1. Personalization Page
+            );
         case 'Kişiselleştirme':
-          return (
-            <div className="animate-in fade-in slide-in-from-right-4 duration-200 space-y-8">
-                
-                {/* Background Section */}
-                <div>
+             return (
+                 <div className="animate-in fade-in slide-in-from-right-4 duration-200">
                     <h2 className="text-xl font-light mb-4">Arka Plan</h2>
                     
-                    {/* Preview */}
-                    <div className="mb-6">
-                        <div className={`aspect-video w-full max-w-md bg-black rounded-md overflow-hidden border border-gray-600 relative shadow-lg`}>
-                            <img src={currentWallpaper} className="w-full h-full object-cover" alt="Preview" />
-                            <div className="absolute bottom-4 left-4 right-4 h-8 bg-black/50 backdrop-blur-sm rounded-sm"></div>
-                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1">
-                                <div className="w-1 h-1 bg-white rounded-full"></div>
-                                <div className="w-1 h-1 bg-white/50 rounded-full"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Chooser */}
-                    <div className="space-y-4 max-w-2xl">
-                        <div>
-                            <label className="block text-sm font-medium mb-2">Resim seçin</label>
-                            <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
-                            {PRESET_WALLPAPERS.map((wp, idx) => (
-                                <button 
-                                    key={idx}
+                    <div className="bg-[#2d2d2d] p-4 rounded-sm mb-6">
+                        <div className="aspect-video w-full bg-cover bg-center rounded-sm border border-gray-600 mb-4 transition-all duration-500" style={{backgroundImage: `url(${currentWallpaper})`}}></div>
+                        
+                        <div className="grid grid-cols-3 gap-2 mb-4">
+                            {PRESET_WALLPAPERS.map((wp, i) => (
+                                <div 
+                                    key={i} 
+                                    className={`aspect-video bg-cover bg-center rounded-sm cursor-pointer border-2 hover:opacity-100 transition-all ${currentWallpaper === wp ? `border-${currentTheme.id}-500 opacity-100` : 'border-transparent opacity-60'}`}
+                                    style={{backgroundImage: `url(${wp})`}}
                                     onClick={() => onSetWallpaper(wp)}
-                                    className={`aspect-square rounded-sm overflow-hidden border-2 transition-all ${currentWallpaper === wp ? `${currentTheme.border} shadow-[0_0_0_2px_rgba(255,255,255,0.1)]` : 'border-transparent hover:border-gray-500'}`}
-                                >
-                                    <img src={wp} className="w-full h-full object-cover" alt={`Wallpaper ${idx + 1}`} />
-                                </button>
+                                ></div>
                             ))}
-                            </div>
                         </div>
 
-                        <div>
-                            <input 
-                            type="file" 
-                            ref={fileInputRef} 
-                            onChange={handleFileChange} 
-                            accept="image/*" 
-                            className="hidden" 
-                            />
-                            <button 
-                            onClick={() => fileInputRef.current?.click()}
-                            className="bg-[#333] hover:bg-[#444] text-white px-4 py-2 rounded-sm text-sm border border-gray-600 transition-colors flex items-center gap-2"
-                            >
-                                <Upload size={16} />
-                                Gözat
-                            </button>
+                        <div className="flex items-center gap-4">
+                             <div className="text-sm text-gray-300">Özel Resim:</div>
+                             <label className="px-4 py-2 bg-[#333] hover:bg-[#444] rounded text-xs cursor-pointer flex items-center gap-2 transition-colors">
+                                 <ImageIcon size={14} /> Gözat
+                                 <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
+                             </label>
                         </div>
                     </div>
-                </div>
 
-                {/* Colors Section */}
-                <div>
                     <h2 className="text-xl font-light mb-4">Renkler</h2>
-                    <p className="text-sm text-gray-400 mb-4">Vurgu renginizi seçin</p>
-                    <div className="flex flex-wrap gap-2">
-                        {Object.values(THEMES).map((t) => (
-                            <button
-                                key={t.id}
-                                onClick={() => onSetTheme(t)}
-                                className={`w-10 h-10 ${t.primary} hover:opacity-90 rounded-sm flex items-center justify-center transition-all border-2 ${currentTheme.id === t.id ? 'border-white' : 'border-transparent'}`}
-                                title={t.name}
-                            >
-                                {currentTheme.id === t.id && <Check size={16} />}
-                            </button>
-                        ))}
+                    <div className="bg-[#2d2d2d] p-4 rounded-sm">
+                        <div className="grid grid-cols-6 gap-4">
+                             {Object.values(THEMES).map(theme => (
+                                 <div 
+                                    key={theme.id}
+                                    onClick={() => onSetTheme(theme)}
+                                    className={`w-10 h-10 rounded-full cursor-pointer flex items-center justify-center transition-transform hover:scale-110 ${theme.primary.replace('bg-', 'bg-')} ${currentTheme.id === theme.id ? 'ring-2 ring-white' : ''}`}
+                                    title={theme.name}
+                                 >
+                                     {currentTheme.id === theme.id && <Check size={16} className="text-white" />}
+                                 </div>
+                             ))}
+                        </div>
                     </div>
-                </div>
-            </div>
-        );
-
-        // 3. Main Menu Grid (Default)
+                 </div>
+             );
         default:
             return (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1 max-w-4xl mx-auto animate-in fade-in duration-200">
@@ -544,7 +340,6 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-[#1e1e1e] text-white select-none">
-      {/* Header */}
       <div className="p-8 pb-6 flex flex-col items-center border-b border-[#2d2d2d] bg-[#1e1e1e]">
         <div className="w-full max-w-4xl flex items-center mb-4 relative">
             {activeSection && (
@@ -557,27 +352,11 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
             )}
             <h1 className="text-2xl font-light">{activeSection || 'Windows Ayarları'}</h1>
         </div>
-        
-        {!activeSection && (
-            <div className="flex items-center bg-[#2d2d2d] p-1.5 rounded-sm border border-gray-600 w-full max-w-sm focus-within:bg-black focus-within:border-white transition-colors">
-                <Search size={16} className="text-gray-400 ml-2" />
-                <input type="text" placeholder="Bir ayar bulun" className="bg-transparent border-none outline-none ml-3 text-sm w-full text-white placeholder-gray-400" />
-            </div>
-        )}
       </div>
-
-      {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-[#1a1a1a]">
         <div className="max-w-4xl mx-auto">
            {renderContent()}
         </div>
-        
-        {!activeSection && (
-            <div className="mt-8 text-center text-xs text-gray-600">
-                <p>Com OS Sürüm 2.0 (Tda Company Edition)</p>
-                <p>&copy; 2024 Tda Company. Tüm hakları saklıdır.</p>
-            </div>
-        )}
       </div>
     </div>
   );
@@ -591,13 +370,19 @@ const App: React.FC = () => {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [nextZIndex, setNextZIndex] = useState(100);
   const [wallpaper, setWallpaper] = useState(WALLPAPER_URL);
-  const [currentTheme, setCurrentTheme] = useState<ThemeConfig>(THEMES.blue);
+  const [currentTheme, setCurrentTheme] = useState<ThemeConfig>(THEMES.red);
   
+  // File System State (Hoisted from Explorer)
+  const [fileSystem, setFileSystem] = useState<Record<string, FileSystemItem[]>>(INITIAL_FILE_SYSTEM);
+
   // System State
   const [isBooted, setIsBooted] = useState(false);
-  const [isLocked, setIsLocked] = useState(true); // Default to locked after boot
+  const [isLocked, setIsLocked] = useState(true); 
   const [isShuttingDown, setIsShuttingDown] = useState(false);
+  
+  // Context Menu State
   const [contextMenu, setContextMenu] = useState<{x: number, y: number} | null>(null);
+  
   const [notifications, setNotifications] = useState<Notification[]>([
       { id: '1', title: 'Hoşgeldiniz', message: 'Com OS 2.0 sürümüne başarıyla güncellendi.', app: 'Sistem', time: 'Şimdi', icon: <Terminal size={14} /> }
   ]);
@@ -605,6 +390,15 @@ const App: React.FC = () => {
   
   // Password State
   const [storedPassword, setStoredPassword] = useState(localStorage.getItem('com_os_pwd') || '');
+
+  // Desktop Icons State
+  const [desktopItems, setDesktopItems] = useState<DesktopItem[]>([]);
+  const [pinnedAppIds, setPinnedAppIds] = useState<string[]>(['explorer', 'market', 'assistant']);
+  const [desktopViewMode, setDesktopViewMode] = useState<ViewMode>('medium');
+  const [showDesktopIcons, setShowDesktopIcons] = useState(true);
+  
+  // Dragging State for Desktop Icons
+  const [draggingItem, setDraggingItem] = useState<{id: string, startX: number, startY: number, initialItemX: number, initialItemY: number} | null>(null);
 
   const handleSetPassword = (pass: string) => {
       if (pass) {
@@ -615,7 +409,6 @@ const App: React.FC = () => {
       setStoredPassword(pass);
   };
   
-  // Store installed games as { id: 'game-123', item: MarketItem }
   const [installedGames, setInstalledGames] = useState<Record<string, MarketItem>>({});
 
   const handleInstallApp = (item: MarketItem) => {
@@ -624,7 +417,6 @@ const App: React.FC = () => {
         ...prev,
         [appId]: item
     }));
-    // Add Notification
     setNotifications(prev => [{
         id: Date.now().toString(),
         title: 'Kurulum Tamamlandı',
@@ -643,18 +435,322 @@ const App: React.FC = () => {
       });
   };
 
-  // Merge static registry with installed games dynamically
+  // --- FILE SYSTEM OPERATIONS ---
+
+  const handleSaveFile = (folderName: string, fileName: string, content: string) => {
+      setFileSystem(prev => {
+          const newState = { ...prev };
+          const folderContent = newState[folderName] || [];
+          
+          const existingFileIndex = folderContent.findIndex(f => f.name === fileName);
+          
+          if (existingFileIndex >= 0) {
+              // Update existing
+              const updatedFile = { 
+                  ...folderContent[existingFileIndex], 
+                  content: content,
+                  size: `${Math.ceil(content.length / 1024)} KB` // Simple size calc
+              };
+              newState[folderName] = [
+                  ...folderContent.slice(0, existingFileIndex),
+                  updatedFile,
+                  ...folderContent.slice(existingFileIndex + 1)
+              ];
+          } else {
+              // Create new
+              const newFile: FileSystemItem = {
+                  name: fileName,
+                  type: 'file',
+                  size: `${Math.ceil(content.length / 1024) || 1} KB`,
+                  content: content
+              };
+              newState[folderName] = [...folderContent, newFile];
+          }
+          return newState;
+      });
+  };
+
+  const handleEmptyTrash = () => {
+    setFileSystem(prev => ({
+        ...prev,
+        'Çöp Kutusu': []
+    }));
+    setNotifications(prev => [{
+        id: Date.now().toString(),
+        title: 'Çöp Kutusu Temizlendi',
+        message: 'Silinen dosyalar kalıcı olarak kaldırıldı.',
+        app: 'Sistem',
+        time: 'Şimdi',
+        icon: <Trash2 size={14} />
+    }, ...prev]);
+  };
+
+  // New Folder / File Creation (Desktop Context Menu)
+  const handleCreateNew = (type: 'folder' | 'text') => {
+      const baseName = type === 'folder' ? 'Yeni Klasör' : 'Yeni Metin Belgesi.txt';
+      const folderName = 'Masaüstü';
+      
+      setFileSystem(prev => {
+          const newState = { ...prev };
+          const currentFiles = newState[folderName] || [];
+          
+          let finalName = baseName;
+          let counter = 2;
+          
+          // Generate unique name
+          while(currentFiles.some(f => f.name === finalName)) {
+              if (type === 'folder') finalName = `Yeni Klasör (${counter})`;
+              else finalName = `Yeni Metin Belgesi (${counter}).txt`;
+              counter++;
+          }
+          
+          const newItem: FileSystemItem = type === 'folder' 
+             ? { name: finalName, type: 'folder' }
+             : { name: finalName, type: 'file', size: '0 KB', content: '' };
+             
+          // Also initialize the folder if creating folder
+          if (type === 'folder') newState[finalName] = [];
+          
+          newState[folderName] = [...currentFiles, newItem];
+          return newState;
+      });
+      setContextMenu(null);
+  };
+
+  const handleRefresh = () => {
+      // Force refresh desktop items layout by triggering the useEffect
+      setDesktopItems([]); 
+      setTimeout(() => {
+          // It will auto-repopulate based on useEffect dependency on fileSystem
+      }, 10);
+      setContextMenu(null);
+  };
+  
+  const handleSort = (mode: SortMode) => {
+      // Sorting essentially rearranges the desktopItems array
+      // For this simplified version, we'll sort the FileSystem['Masaüstü'] array
+      // which drives the desktopItems useEffect
+      setFileSystem(prev => {
+          const newState = { ...prev };
+          const desktopFiles = [...(newState['Masaüstü'] || [])];
+          
+          desktopFiles.sort((a, b) => {
+              if (mode === 'name') return a.name.localeCompare(b.name);
+              if (mode === 'type') return a.type.localeCompare(b.type);
+              // Simple size sort approximation
+              if (mode === 'size') return (a.size || '').localeCompare(b.size || '');
+              return 0;
+          });
+          
+          newState['Masaüstü'] = desktopFiles;
+          return newState;
+      });
+      // Also force a visual refresh to reset positions
+      setDesktopItems([]);
+      setContextMenu(null);
+  };
+
   const dynamicRegistry = useMemo<Record<string, { title: string; icon: React.ReactNode }>>(() => {
     const registry: Record<string, { title: string; icon: React.ReactNode }> = { ...APP_REGISTRY };
+    
+    // Add Recycle Bin manually to registry lookup for icon rendering if needed by Desktop logic
+    registry['recycle-bin'] = { title: 'Çöp Kutusu', icon: <Trash2 className="w-full h-full text-gray-400" /> };
+
     Object.entries(installedGames).forEach(([id, item]) => {
         const gameItem = item as MarketItem;
         registry[id] = {
             title: gameItem.name,
-            icon: <GameIcon /> // Use generic game icon but we could customize color
+            icon: <GameIcon /> 
         };
     });
     return registry;
   }, [installedGames]);
+
+  // Sync Desktop Icons with Registry AND File System
+  useEffect(() => {
+    setDesktopItems(prev => {
+        const currentIds = prev.map(i => i.appId);
+        const newItems = [...prev];
+        
+        // Grid spacing depends on view mode
+        const gridSize = desktopViewMode === 'large' ? 128 : desktopViewMode === 'small' ? 86 : 100;
+        const startOffset = 10;
+        
+        // Add "Recycle Bin" special item if missing
+        if (!currentIds.includes('recycle-bin')) {
+             newItems.push({ id: 'desktop-recycle-bin', appId: 'recycle-bin', x: startOffset, y: startOffset });
+        }
+
+        // Add "My Files" special item if missing (offset y by grid size since Recycle Bin is first)
+        if (!currentIds.includes('explorer')) {
+             newItems.push({ id: 'desktop-explorer', appId: 'explorer', x: startOffset, y: startOffset + gridSize });
+        }
+
+        // Add other apps from registry if missing
+        const registryKeys = Object.keys(dynamicRegistry).filter(k => k !== 'explorer' && k !== 'recycle-bin');
+        
+        // Simple grid calculation for new items
+        const filledPositions = new Set(newItems.map(i => `${i.x},${i.y}`));
+        let nextX = startOffset;
+        let nextY = startOffset;
+
+        const getNextPos = () => {
+             while (filledPositions.has(`${nextX},${nextY}`)) {
+                 nextY += gridSize;
+                 if (nextY > window.innerHeight - gridSize) {
+                     nextY = startOffset;
+                     nextX += gridSize;
+                 }
+             }
+             return { x: nextX, y: nextY };
+        };
+
+        registryKeys.forEach(appId => {
+            if (!currentIds.includes(appId)) {
+                const pos = getNextPos();
+                newItems.push({ id: `desktop-${appId}`, appId, x: pos.x, y: pos.y });
+                filledPositions.add(`${pos.x},${pos.y}`);
+            }
+        });
+
+        // Add Desktop Files from FileSystem to Desktop
+        const desktopFiles = fileSystem['Masaüstü'] || [];
+        desktopFiles.forEach(file => {
+             const fileId = `file-${file.name}`;
+             if (!currentIds.includes(fileId)) {
+                 const pos = getNextPos();
+                 newItems.push({ id: fileId, appId: `file://${file.name}` as AppId, x: pos.x, y: pos.y }); 
+                 filledPositions.add(`${pos.x},${pos.y}`);
+             }
+        });
+
+        // Remove items that are no longer installed (or deleted files)
+        return newItems.filter(i => {
+            if (i.appId === 'recycle-bin') return true;
+            if (i.appId.toString().startsWith('file://')) {
+                const fname = i.appId.toString().replace('file://', '');
+                return desktopFiles.some(f => f.name === fname);
+            }
+            return i.appId === 'explorer' || dynamicRegistry[i.appId];
+        });
+    });
+  }, [dynamicRegistry, fileSystem, desktopViewMode]); // Re-run if view mode changes to re-calc grid logic for new items
+
+
+  // --- DESKTOP ICON DRAGGING LOGIC ---
+
+  const handleIconMouseDown = (e: React.MouseEvent, item: DesktopItem) => {
+      e.preventDefault();
+      setDraggingItem({
+          id: item.id,
+          startX: e.clientX,
+          startY: e.clientY,
+          initialItemX: item.x,
+          initialItemY: item.y
+      });
+  };
+
+  const handleIconMouseMove = useCallback((e: MouseEvent) => {
+      if (!draggingItem) return;
+
+      const deltaX = e.clientX - draggingItem.startX;
+      const deltaY = e.clientY - draggingItem.startY;
+
+      setDesktopItems(prev => prev.map(item => {
+          if (item.id === draggingItem.id) {
+              return {
+                  ...item,
+                  x: item.id === draggingItem.id ? Math.max(0, Math.min(window.innerWidth - 80, draggingItem.initialItemX + deltaX)) : item.x,
+                  y: item.id === draggingItem.id ? Math.max(0, Math.min(window.innerHeight - 100, draggingItem.initialItemY + deltaY)) : item.y
+              };
+          }
+          return item;
+      }));
+  }, [draggingItem]);
+
+  const handleIconMouseUp = useCallback((e: MouseEvent) => {
+      if (!draggingItem) return;
+
+      // 1. Check drop on Taskbar (Pinning)
+      if (e.clientY > window.innerHeight - 50) {
+          const item = desktopItems.find(i => i.id === draggingItem.id);
+          if (item && !item.appId.toString().startsWith('file://') && item.appId !== 'recycle-bin') {
+              const appId = item.appId;
+              if (!pinnedAppIds.includes(appId)) {
+                  setPinnedAppIds(prev => [...prev, appId]);
+                  setNotifications(prev => [{
+                    id: Date.now().toString(),
+                    title: 'Sabitlendi',
+                    message: `${dynamicRegistry[appId]?.title || 'Uygulama'} görev çubuğuna sabitlendi.`,
+                    app: 'Sistem',
+                    time: 'Şimdi',
+                    icon: <Pin size={14} />
+                  }, ...prev]);
+              }
+          }
+      }
+
+      // 2. Check drop on Recycle Bin (Deletion)
+      const recycleBinItem = desktopItems.find(i => i.appId === 'recycle-bin');
+      const draggedItem = desktopItems.find(i => i.id === draggingItem.id);
+      
+      if (recycleBinItem && draggedItem && draggedItem.id !== recycleBinItem.id) {
+          // Calculate distance to recycle bin
+          const dist = Math.sqrt(
+              Math.pow(e.clientX - (recycleBinItem.x + 40), 2) + 
+              Math.pow(e.clientY - (recycleBinItem.y + 40), 2)
+          );
+          
+          if (dist < 60) {
+              // Dragged onto recycle bin
+              if (draggedItem.appId.toString().startsWith('file://')) {
+                  const fileName = draggedItem.appId.toString().replace('file://', '');
+                  
+                  // Move file logic
+                  setFileSystem(prev => {
+                      const newState = { ...prev };
+                      const desktopFiles = newState['Masaüstü'] || [];
+                      const fileToMove = desktopFiles.find(f => f.name === fileName);
+                      
+                      if (fileToMove) {
+                          newState['Masaüstü'] = desktopFiles.filter(f => f.name !== fileName);
+                          newState['Çöp Kutusu'] = [...(newState['Çöp Kutusu'] || []), fileToMove];
+                          
+                           // Play sound or notification
+                           const audio = new Audio(); // Placeholder for sound
+                      }
+                      return newState;
+                  });
+                  
+                  setNotifications(prev => [{
+                    id: Date.now().toString(),
+                    title: 'Dosya Silindi',
+                    message: `${fileName} çöp kutusuna taşındı.`,
+                    app: 'Sistem',
+                    time: 'Şimdi',
+                    icon: <Trash2 size={14} />
+                  }, ...prev]);
+              }
+          }
+      }
+
+      setDraggingItem(null);
+  }, [draggingItem, desktopItems, pinnedAppIds, dynamicRegistry]);
+
+  useEffect(() => {
+      if (draggingItem) {
+          window.addEventListener('mousemove', handleIconMouseMove);
+          window.addEventListener('mouseup', handleIconMouseUp);
+      } else {
+          window.removeEventListener('mousemove', handleIconMouseMove);
+          window.removeEventListener('mouseup', handleIconMouseUp);
+      }
+      return () => {
+          window.removeEventListener('mousemove', handleIconMouseMove);
+          window.removeEventListener('mouseup', handleIconMouseUp);
+      };
+  }, [draggingItem, handleIconMouseMove, handleIconMouseUp]);
+
 
   const getComponent = (window: WindowState) => {
     const { appId, data } = window;
@@ -667,19 +763,60 @@ const App: React.FC = () => {
 
     switch(appId) {
       case 'market': return <MarketApp onInstallApp={handleInstallApp} installedAppIds={Object.keys(installedGames)} theme={currentTheme} />;
-      case 'browser': return <BrowserApp theme={currentTheme} />;
       case 'assistant': return <AssistantApp theme={currentTheme} />;
       case 'calculator': return <CalculatorApp theme={currentTheme} />;
-      case 'notepad': return <NotepadApp />;
+      case 'notepad': return <NotepadApp initialData={data} onSave={handleSaveFile} />;
       case 'video': return <VideoPlayer file={data} theme={currentTheme} />;
       case 'music': return <MusicPlayer file={data} theme={currentTheme} />;
-      case 'explorer': return <ExplorerApp theme={currentTheme} onOpenApp={(id, data) => openApp(id, undefined, data)} />;
-      case 'settings': return <SettingsApp currentWallpaper={wallpaper} onSetWallpaper={setWallpaper} installedGames={installedGames} onUninstallGame={handleUninstallGame} currentTheme={currentTheme} onSetTheme={setCurrentTheme} storedPassword={storedPassword} onSetPassword={handleSetPassword} />;
+      case 'explorer': return <ExplorerApp theme={currentTheme} fileSystem={fileSystem} onOpenApp={(id, data) => openApp(id, undefined, data)} initialPath={data?.path || 'Bu Bilgisayar'} onEmptyTrash={handleEmptyTrash} />;
+      case 'settings': return <SettingsApp currentWallpaper={wallpaper} onSetWallpaper={setWallpaper} installedGames={installedGames} onUninstallGame={handleUninstallGame} currentTheme={currentTheme} onSetTheme={setCurrentTheme} storedPassword={storedPassword} onSetPassword={handleSetPassword} defaultSection={data?.section} />;
+      case 'recycle-bin': return <ExplorerApp theme={currentTheme} fileSystem={fileSystem} onOpenApp={(id, data) => openApp(id, undefined, data)} initialPath="Çöp Kutusu" onEmptyTrash={handleEmptyTrash} />;
       default: return <div className="p-4 text-white">Uygulama yükleniyor...</div>;
     }
   };
 
   const openApp = useCallback((appId: AppId, instanceId?: string, data?: any) => {
+    // Desktop File Opening Logic
+    if (appId.toString().startsWith('file://')) {
+        const fileName = appId.toString().replace('file://', '');
+        // Find file in desktop
+        const file = fileSystem['Masaüstü']?.find(f => f.name === fileName);
+        if (file) {
+            // Determine app based on extension
+            const ext = fileName.split('.').pop()?.toLowerCase();
+            if (['txt', 'log', 'ini', 'md', 'js', 'json'].includes(ext || '')) {
+                 openApp('notepad', undefined, { name: file.name, content: file.content, folder: 'Masaüstü' });
+            } else if (['mp4', 'mkv'].includes(ext || '')) {
+                 openApp('video', undefined, { name: file.name, url: file.url });
+            } else if (['mp3', 'wav', 'flac'].includes(ext || '')) {
+                 openApp('music', undefined, { name: file.name, url: file.url });
+            } else {
+                 openApp('notepad', undefined, { name: file.name, content: file.content || "Dosya okunamıyor." });
+            }
+        }
+        return;
+    }
+    
+    // Recycle Bin Special Case
+    if (appId === 'recycle-bin') {
+        const newId = `recycle-bin-${Date.now()}`;
+        setWindows(prev => [...prev, {
+          id: newId,
+          appId: 'recycle-bin',
+          title: 'Çöp Kutusu',
+          x: 100,
+          y: 100,
+          width: 800,
+          height: 600,
+          isMinimized: false,
+          isMaximized: false,
+          zIndex: nextZIndex + 1
+        }]);
+        setNextZIndex(z => z + 1);
+        setActiveWindowId(newId);
+        return;
+    }
+
     // If instanceId provided, toggle minimize/restore
     if (instanceId) {
         setWindows(prev => prev.map(w => {
@@ -709,7 +846,7 @@ const App: React.FC = () => {
     const newWindow: WindowState = {
       id: newId,
       appId,
-      title: registryItem.title,
+      title: data?.name ? `${data.name} - ${registryItem.title}` : registryItem.title,
       x: 50 + (windows.length * 30) % 300,
       y: 50 + (windows.length * 30) % 300,
       width: appId === 'market' ? 1000 : appId === 'calculator' ? 320 : 800,
@@ -725,7 +862,7 @@ const App: React.FC = () => {
     setActiveWindowId(newId);
     setIsStartOpen(false);
     setIsActionCenterOpen(false);
-  }, [windows.length, nextZIndex, activeWindowId, dynamicRegistry]);
+  }, [windows.length, nextZIndex, activeWindowId, dynamicRegistry, fileSystem]);
 
   const closeWindow = (id: string) => {
     setWindows(prev => prev.filter(w => w.id !== id));
@@ -744,7 +881,6 @@ const App: React.FC = () => {
     setWindows(prev => prev.map(w => w.id === id ? { ...w, zIndex: nextZIndex + 1 } : w));
   };
 
-  // Play startup sound using Web Audio API
   const playStartupSound = () => {
     try {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
@@ -752,38 +888,26 @@ const App: React.FC = () => {
       
       const ctx = new AudioContext();
       const now = ctx.currentTime;
-      
-      // F# Major 7 chord tones (F#4, A#4, C#5, F5) - Modern/Tech feel
       const freqs = [369.99, 466.16, 554.37, 698.46]; 
       
       freqs.forEach((freq, i) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        
-        // Use a mix of sine and triangle for a fuller sound
         osc.type = i % 2 === 0 ? 'sine' : 'triangle';
         osc.frequency.value = freq;
-        
-        // Envelope
         gain.gain.setValueAtTime(0, now);
-        // Staggered attack for arpeggiated feel
         gain.gain.linearRampToValueAtTime(0.05, now + 0.1 + (i * 0.05)); 
-        // Long decay
         gain.gain.exponentialRampToValueAtTime(0.001, now + 3);
-
         osc.connect(gain);
         gain.connect(ctx.destination);
-        
         osc.start(now);
         osc.stop(now + 3);
       });
-
     } catch (e) {
       console.error("Audio playback failed", e);
     }
   };
 
-  // Effect to trigger sound on boot (only when entering lock screen initially)
   useEffect(() => {
     if (isBooted && isLocked) {
       setTimeout(() => {
@@ -792,15 +916,12 @@ const App: React.FC = () => {
     }
   }, [isBooted, isLocked]);
 
-  // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-        // Meta (Windows) + E -> Explorer
         if (e.metaKey && e.key === 'e') {
             e.preventDefault();
             openApp('explorer');
         }
-        // Meta + D -> Show Desktop (Minimize All)
         if (e.metaKey && e.key === 'd') {
             e.preventDefault();
             setWindows(prev => prev.map(w => ({ ...w, isMinimized: true })));
@@ -819,13 +940,12 @@ const App: React.FC = () => {
   const handleShutdown = () => {
     setIsStartOpen(false);
     setIsShuttingDown(true);
-    // Simulate shutdown time
     setTimeout(() => {
         setWindows([]);
         setActiveWindowId(null);
         setIsShuttingDown(false);
-        setIsBooted(false); // Return to boot/bios state
-        setIsLocked(true); // Reset lock state for next boot
+        setIsBooted(false); 
+        setIsLocked(true); 
     }, 3000);
   };
 
@@ -833,18 +953,21 @@ const App: React.FC = () => {
       setIsLocked(false);
   };
 
+  // Determine icon size based on view mode
+  const iconSize = desktopViewMode === 'large' ? 'w-32 h-32' : desktopViewMode === 'small' ? 'w-20 h-20' : 'w-24 h-24';
+  const innerIconSize = desktopViewMode === 'large' ? 'w-16 h-16' : desktopViewMode === 'small' ? 'w-8 h-8' : 'w-10 h-10';
+  const textSize = desktopViewMode === 'small' ? 'text-[10px]' : 'text-xs';
+
   if (!isBooted) {
       return <BootScreen onBootComplete={() => setIsBooted(true)} />;
   }
 
-  // Lock Screen Overlay
   if (isLocked) {
       return <LockScreen onUnlock={handleUnlock} wallpaper={wallpaper} theme={currentTheme} password={storedPassword} />;
   }
 
   return (
     <>
-        {/* Shutdown Overlay */}
         {isShuttingDown && (
             <div className="fixed inset-0 z-[10002] bg-black flex flex-col items-center justify-center text-white cursor-none select-none">
                  <div className="w-8 h-8 border-4 border-t-blue-500 border-white/20 rounded-full animate-spin mb-4"></div>
@@ -863,51 +986,123 @@ const App: React.FC = () => {
             }}
             onContextMenu={handleDesktopRightClick}
         >
-        {/* Desktop Icons Area */}
-        <div className="absolute top-0 left-0 bottom-10 p-2 grid grid-flow-col grid-rows-[repeat(auto-fill,100px)] gap-2 content-start w-fit">
-            {/* User Folder "Dosyalarım" Shortcut */}
-            <div 
-                className="w-24 h-24 flex flex-col items-center justify-center gap-1 hover:bg-white/10 border border-transparent hover:border-white/20 rounded-sm cursor-pointer group text-shadow transition-colors"
-                onDoubleClick={() => openApp('explorer')}
-            >
-                <div className="w-10 h-10 drop-shadow-2xl filter"><FolderClosed className="w-full h-full text-yellow-400 fill-yellow-400" /></div>
-                <span className="text-white text-xs text-center line-clamp-2 px-1 font-normal drop-shadow-md">Dosyalarım</span>
-            </div>
+        
+        {/* Desktop Icons Area (Absolute Positioning) */}
+        {showDesktopIcons && desktopItems.map(item => {
+            // Determine display title and icon
+            let displayTitle = '';
+            let displayIcon: React.ReactNode = null;
+            
+            if (item.appId === 'recycle-bin') {
+                displayTitle = 'Çöp Kutusu';
+                // Check if trash has items
+                const trashCount = fileSystem['Çöp Kutusu']?.length || 0;
+                displayIcon = <Trash2 className={`${innerIconSize} ${trashCount > 0 ? 'text-red-400 fill-red-400/20' : 'text-gray-300'}`} />;
+            } else if (item.appId === 'explorer') {
+                 displayTitle = 'Dosyalarım';
+                 displayIcon = <FolderClosed className={`${innerIconSize} text-yellow-400 fill-yellow-400`} />;
+            } else if (item.appId.toString().startsWith('file://')) {
+                 displayTitle = item.appId.toString().replace('file://', '');
+                 const ext = displayTitle.split('.').pop()?.toLowerCase();
+                 // Simple icon logic
+                 const iconClass = `${innerIconSize} text-white`;
+                 if (['txt', 'md'].includes(ext || '')) displayIcon = <FileText className={iconClass} />;
+                 else displayIcon = <FileText className={`${innerIconSize} text-gray-400`} />;
+            } else if (dynamicRegistry[item.appId]) {
+                 displayTitle = dynamicRegistry[item.appId].title;
+                 // We need to clone the icon element to add sizing classes if it's a React Element
+                 const OriginalIcon = dynamicRegistry[item.appId].icon as React.ReactElement<{ className?: string }>;
+                 displayIcon = React.cloneElement(OriginalIcon, { className: `${innerIconSize} ${OriginalIcon.props.className?.replace('w-full h-full', '') || ''}` });
+            } else {
+                 return null; // Don't render unknown
+            }
 
-            {Object.entries(dynamicRegistry).filter(([k]) => k !== 'explorer').map(([key, entry]) => {
-                const app = entry as { title: string; icon: React.ReactNode };
-                const appId = key as AppId;
-                return (
-                    <div 
-                        key={appId}
-                        className="w-24 h-24 flex flex-col items-center justify-center gap-1 hover:bg-white/10 border border-transparent hover:border-white/20 rounded-sm cursor-pointer group text-shadow transition-colors"
-                        onDoubleClick={() => openApp(appId)}
-                    >
-                        <div className="w-10 h-10 drop-shadow-2xl filter">{app.icon}</div>
-                        <span className="text-white text-xs text-center line-clamp-2 px-1 font-normal drop-shadow-md">{app.title}</span>
-                    </div>
-                )
-            })}
-        </div>
+            return (
+                <div 
+                    key={item.id}
+                    className={`absolute ${iconSize} flex flex-col items-center justify-start pt-2 gap-1 hover:bg-white/10 border border-transparent hover:border-white/20 rounded-sm cursor-pointer group text-shadow transition-all`}
+                    style={{ left: item.x, top: item.y, zIndex: draggingItem?.id === item.id ? 50 : 1 }}
+                    onDoubleClick={() => openApp(item.appId)}
+                    onMouseDown={(e) => handleIconMouseDown(e, item)}
+                >
+                    <div className="drop-shadow-2xl filter pointer-events-none">{displayIcon}</div>
+                    <span className={`text-white ${textSize} text-center line-clamp-2 px-1 font-normal drop-shadow-md pointer-events-none select-none break-all`}>{displayTitle}</span>
+                </div>
+            );
+        })}
 
         {/* Context Menu */}
         {contextMenu && (
             <div 
-                className="absolute bg-[#2d2d2d] border border-gray-600 shadow-xl rounded-sm py-1 w-48 z-[10000]"
+                className="absolute bg-[#2b2b2b] border border-[#444] shadow-2xl rounded-sm py-1 w-64 z-[10000] text-gray-200 text-sm font-segoe animate-in fade-in duration-100"
                 style={{ left: contextMenu.x, top: contextMenu.y }}
+                onClick={(e) => e.stopPropagation()}
             >
-                <div className="px-4 py-1.5 hover:bg-[#444] text-white text-sm cursor-pointer flex items-center gap-2">
-                    <LayoutGrid size={14} /> Görünüm
+                {/* View Submenu */}
+                <div className="relative group/view">
+                    <div className="px-4 py-1.5 hover:bg-[#444] cursor-default flex items-center justify-between">
+                        <div className="flex items-center gap-2"><LayoutGrid size={16} /> Görünüm</div>
+                        <ChevronRight size={14} />
+                    </div>
+                    <div className="absolute left-full top-0 ml-[-2px] bg-[#2b2b2b] border border-[#444] shadow-xl w-56 py-1 hidden group-hover/view:block">
+                        <div className="px-4 py-1.5 hover:bg-[#444] cursor-pointer flex items-center gap-3" onClick={() => { setDesktopViewMode('large'); setContextMenu(null); }}>
+                             <div className="w-4 flex justify-center">{desktopViewMode === 'large' && <Circle size={6} fill="white" />}</div> Büyük simgeler
+                        </div>
+                        <div className="px-4 py-1.5 hover:bg-[#444] cursor-pointer flex items-center gap-3" onClick={() => { setDesktopViewMode('medium'); setContextMenu(null); }}>
+                            <div className="w-4 flex justify-center">{desktopViewMode === 'medium' && <Circle size={6} fill="white" />}</div> Orta boyutlu simgeler
+                        </div>
+                        <div className="px-4 py-1.5 hover:bg-[#444] cursor-pointer flex items-center gap-3" onClick={() => { setDesktopViewMode('small'); setContextMenu(null); }}>
+                            <div className="w-4 flex justify-center">{desktopViewMode === 'small' && <Circle size={6} fill="white" />}</div> Küçük simgeler
+                        </div>
+                        <div className="h-[1px] bg-gray-600 my-1 mx-2"></div>
+                        <div className="px-4 py-1.5 hover:bg-[#444] cursor-pointer flex items-center gap-3" onClick={() => { setShowDesktopIcons(!showDesktopIcons); setContextMenu(null); }}>
+                            <div className="w-4 flex justify-center">{showDesktopIcons && <Check size={14} />}</div> Masaüstü öğelerini göster
+                        </div>
+                    </div>
                 </div>
-                <div className="px-4 py-1.5 hover:bg-[#444] text-white text-sm cursor-pointer flex items-center gap-2">
-                    <RefreshCw size={14} /> Yenile
+
+                {/* Sort Submenu */}
+                <div className="relative group/sort">
+                    <div className="px-4 py-1.5 hover:bg-[#444] cursor-default flex items-center justify-between">
+                        <div className="flex items-center gap-2"><ArrowLeft size={16} className="rotate-90" /> Sıralama ölçütü</div>
+                        <ChevronRight size={14} />
+                    </div>
+                     <div className="absolute left-full top-0 ml-[-2px] bg-[#2b2b2b] border border-[#444] shadow-xl w-56 py-1 hidden group-hover/sort:block">
+                        <div className="px-4 py-1.5 hover:bg-[#444] cursor-pointer pl-8" onClick={() => handleSort('name')}>Ad</div>
+                        <div className="px-4 py-1.5 hover:bg-[#444] cursor-pointer pl-8" onClick={() => handleSort('size')}>Boyut</div>
+                        <div className="px-4 py-1.5 hover:bg-[#444] cursor-pointer pl-8" onClick={() => handleSort('type')}>Öğe türü</div>
+                    </div>
                 </div>
+
+                <div className="px-4 py-1.5 hover:bg-[#444] cursor-pointer flex items-center gap-2" onClick={handleRefresh}>
+                    <RefreshCw size={16} /> Yenile
+                </div>
+
                 <div className="h-[1px] bg-gray-600 my-1 mx-2"></div>
-                <div className="px-4 py-1.5 hover:bg-[#444] text-white text-sm cursor-pointer flex items-center gap-2" onClick={() => openApp('settings')}>
-                    <Palette size={14} /> Kişiselleştir
+                
+                {/* New Submenu */}
+                <div className="relative group/new">
+                     <div className="px-4 py-1.5 hover:bg-[#444] cursor-default flex items-center justify-between">
+                        <div className="flex items-center gap-2"><FilePlus size={16} /> Yeni</div>
+                        <ChevronRight size={14} />
+                    </div>
+                    <div className="absolute left-full top-0 ml-[-2px] bg-[#2b2b2b] border border-[#444] shadow-xl w-56 py-1 hidden group-hover/new:block">
+                        <div className="px-4 py-1.5 hover:bg-[#444] cursor-pointer flex items-center gap-3" onClick={() => handleCreateNew('folder')}>
+                             <FolderPlus size={16} className="text-yellow-400" /> Klasör
+                        </div>
+                        <div className="px-4 py-1.5 hover:bg-[#444] cursor-pointer flex items-center gap-3" onClick={() => handleCreateNew('text')}>
+                             <FileText size={16} className="text-gray-400" /> Metin Belgesi
+                        </div>
+                    </div>
                 </div>
-                <div className="px-4 py-1.5 hover:bg-[#444] text-white text-sm cursor-pointer flex items-center gap-2" onClick={() => openApp('settings')}>
-                    <Monitor size={14} /> Görüntü Ayarları
+
+                <div className="h-[1px] bg-gray-600 my-1 mx-2"></div>
+                
+                <div className="px-4 py-1.5 hover:bg-[#444] cursor-pointer flex items-center gap-2" onClick={() => { openApp('settings', undefined, {section: 'Sistem'}); setContextMenu(null); }}>
+                    <Monitor size={16} /> Görüntü Ayarları
+                </div>
+                <div className="px-4 py-1.5 hover:bg-[#444] cursor-pointer flex items-center gap-2" onClick={() => { openApp('settings', undefined, {section: 'Kişiselleştirme'}); setContextMenu(null); }}>
+                    <Palette size={16} /> Kişiselleştir
                 </div>
             </div>
         )}
@@ -921,7 +1116,7 @@ const App: React.FC = () => {
             onClose={closeWindow}
             onMinimize={minimizeWindow}
             onFocus={focusWindow}
-            icon={dynamicRegistry[win.appId]?.icon}
+            icon={dynamicRegistry[win.appId]?.icon || (win.appId === 'recycle-bin' ? <Trash2 /> : <FileText />)}
             theme={currentTheme}
             >
             {getComponent(win)}
@@ -976,6 +1171,7 @@ const App: React.FC = () => {
                 setIsActionCenterOpen(false);
             }}
             hasNotifications={notifications.length > 0}
+            pinnedAppIds={pinnedAppIds}
         />
         </div>
     </>

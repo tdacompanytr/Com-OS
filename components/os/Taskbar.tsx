@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AppId, ThemeConfig } from '../../types';
-import { ChevronUp, Wifi, Volume2, MessageSquare, Battery } from 'lucide-react';
+import { ChevronUp, Wifi, Volume2, MessageSquare, Battery, Cpu } from 'lucide-react';
 
 interface TaskbarProps {
   openWindows: Array<{ id: string; appId: AppId; isMinimized: boolean; zIndex: number }>;
@@ -13,23 +13,43 @@ interface TaskbarProps {
   onToggleActionCenter: () => void;
   onToggleCalendar: () => void;
   hasNotifications: boolean;
+  pinnedAppIds: string[];
 }
 
 const Taskbar: React.FC<TaskbarProps> = ({ 
     openWindows, activeWindowId, onAppClick, onToggleStart, isStartOpen, registry, theme,
-    onToggleActionCenter, onToggleCalendar, hasNotifications
+    onToggleActionCenter, onToggleCalendar, hasNotifications, pinnedAppIds
 }) => {
   const [time, setTime] = useState(new Date());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchError, setSearchError] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const pinnedApps: AppId[] = ['browser', 'market', 'assistant', 'explorer'];
+  const handleSearch = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      // Find matching app in registry
+      const foundAppId = Object.keys(registry).find(id => 
+        registry[id].title.toLowerCase().includes(query)
+      );
+
+      if (foundAppId) {
+        onAppClick(foundAppId as AppId);
+        setSearchQuery('');
+        setSearchError(false);
+      } else {
+        setSearchError(true);
+        setTimeout(() => setSearchError(false), 500);
+      }
+    }
+  };
 
   // Combine pinned apps and open unpinned apps unique list
-  const taskbarItems = [...pinnedApps];
+  const taskbarItems = [...pinnedAppIds];
   openWindows.forEach(win => {
      if (!taskbarItems.includes(win.appId)) {
         taskbarItems.push(win.appId);
@@ -39,20 +59,29 @@ const Taskbar: React.FC<TaskbarProps> = ({
   return (
     <div className="h-12 bg-[#101010]/90 backdrop-blur-xl flex items-center justify-between text-white fixed bottom-0 left-0 right-0 z-[9999] border-t border-white/5 shadow-2xl">
       <div className="flex items-center h-full pl-2">
-        {/* Start Button */}
+        {/* Start Button - Red CPU Logo */}
         <button 
           onClick={onToggleStart}
-          className={`h-10 w-10 rounded-md flex items-center justify-center hover:bg-white/10 transition-all duration-150 active:scale-95 ${isStartOpen ? `bg-white/10` : ''}`}
+          className={`h-10 w-10 rounded-md flex items-center justify-center hover:bg-white/10 transition-all duration-150 active:scale-95 group ${isStartOpen ? `bg-white/10` : ''}`}
+          title="Başlat"
         >
-           <svg viewBox="0 0 24 24" className={`w-6 h-6 transition-colors duration-300 ${isStartOpen ? 'fill-blue-400' : 'fill-white'}`}>
-            <path d="M0 3.429L9.429 2.143V11.571H0V3.429ZM9.429 12.429V21.857L0 20.571V12.429H9.429ZM10.286 2.036L24 0V11.571H10.286V2.036ZM24 24L10.286 21.964V12.429H24V24Z" />
-          </svg>
+           <Cpu 
+             size={28} 
+             className={`transition-all duration-300 drop-shadow-[0_0_8px_rgba(220,38,38,0.6)] group-hover:drop-shadow-[0_0_12px_rgba(220,38,38,0.8)] ${isStartOpen ? 'text-white' : 'text-red-600'}`} 
+           />
         </button>
 
-        {/* Search Bar Placeholder */}
-        <div className="hidden md:flex items-center bg-[#2d2d2d] hover:bg-[#333] transition-colors text-gray-300 h-8 w-64 px-3 ml-3 rounded-full cursor-text border border-transparent focus-within:border-gray-500 focus-within:bg-black focus-within:text-white">
-            <SearchIcon className="w-4 h-4 mr-2 opacity-50" />
-            <span className="text-xs opacity-70">Aramak için buraya yazın</span>
+        {/* Functional Search Bar */}
+        <div className={`hidden md:flex items-center bg-[#2d2d2d] hover:bg-[#333] transition-colors text-gray-300 h-8 w-64 px-3 ml-3 rounded-full cursor-text border focus-within:bg-black focus-within:text-white group ${searchError ? 'border-red-500 animate-shake' : 'border-transparent focus-within:border-gray-500'}`}>
+            <SearchIcon className="w-4 h-4 mr-2 opacity-50 group-focus-within:opacity-100 transition-opacity" />
+            <input 
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={handleSearch}
+              placeholder="Aramak için buraya yazın"
+              className="bg-transparent border-none outline-none text-xs w-full text-white placeholder-gray-500 h-full"
+            />
         </div>
 
         {/* Taskbar Icons */}
@@ -77,6 +106,7 @@ const Taskbar: React.FC<TaskbarProps> = ({
                    }
                 }}
                 className={`w-10 h-10 rounded-md flex items-center justify-center relative hover:bg-white/10 transition-all duration-150 active:scale-90 group ${isActive ? 'bg-white/5' : ''}`}
+                title={appInfo.title}
               >
                 <div className={`w-6 h-6 transition-transform duration-300 ease-fluid ${isOpen ? 'scale-100' : 'scale-90 opacity-80'} ${isActive ? '-translate-y-0.5' : ''}`}>
                     {appInfo.icon}

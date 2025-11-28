@@ -124,7 +124,7 @@ const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onAppClick, onClose, onSh
            {/* Recently Added Section */}
            <div className="mb-4">
               <div className="px-3 py-1 text-xs font-semibold text-gray-400 mb-1">En çok kullanılanlar</div>
-              {['browser', 'market', 'explorer'].map(id => (
+              {['market', 'explorer'].map(id => (
                   <button
                     key={id}
                     onClick={() => { onAppClick(id as AppId); onClose(); }}
@@ -182,18 +182,6 @@ const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onAppClick, onClose, onSh
                  </div>
                </div>
              }
-           />
-
-           <Tile 
-              size="medium"
-              color="bg-[#2b2b2b] hover:bg-[#333]"
-              onClick={() => { onAppClick('browser'); onClose(); }}
-              content={
-                 <div className="flex flex-col items-center justify-center h-full gap-2 p-2">
-                    <div className="w-8 h-8">{registry['browser']?.icon}</div>
-                    <span className="text-xs text-center leading-tight text-gray-300">İnternette Gezin</span>
-                 </div>
-              }
            />
 
            <Tile 

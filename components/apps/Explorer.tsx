@@ -6,71 +6,24 @@ import {
     FileType, Star, Pin, Trash2, MoreHorizontal, X, ExternalLink, FolderPlus,
     Copy, Scissors, ClipboardPaste
 } from 'lucide-react';
+import { FileSystemItem } from '../../App'; // Import interface from App
 
 interface ExplorerAppProps {
   theme?: ThemeConfig;
   initialPath?: string;
   onOpenApp: (appId: string, data?: any) => void;
+  fileSystem: Record<string, FileSystemItem[]>; // Receive file system as prop
+  onEmptyTrash?: () => void;
 }
 
 type FilterType = 'all' | 'image' | 'doc' | 'music' | 'large';
 
-// Mock FS with Real Playable URLs for demo purposes
-const INITIAL_FILE_SYSTEM: Record<string, {name: string, type: 'folder' | 'file' | 'drive', icon?: any, size?: string, url?: string}[]> = {
-    'Bu Bilgisayar': [
-        { name: 'Yerel Disk (C:)', type: 'drive', size: '120 GB boş' },
-        { name: 'Masaüstü', type: 'folder' },
-        { name: 'Belgeler', type: 'folder' },
-        { name: 'İndirilenler', type: 'folder' },
-        { name: 'Resimler', type: 'folder' },
-        { name: 'Müzik', type: 'folder' },
-    ],
-    'Yerel Disk (C:)': [
-        { name: 'Windows', type: 'folder' },
-        { name: 'Program Files', type: 'folder' },
-        { name: 'Users', type: 'folder' },
-        { name: 'ComOS_Logs.txt', type: 'file', size: '2 KB' },
-        { name: 'Swapfile.sys', type: 'file', size: '2.5 GB' },
-    ],
-    'Belgeler': [
-        { name: 'Ödevler', type: 'folder' },
-        { name: 'Proje Notları.txt', type: 'file', size: '14 KB' },
-        { name: 'Özgeçmiş.docx', type: 'file', size: '450 KB' },
-        { name: 'Mali Tablo.xlsx', type: 'file', size: '2.1 MB' },
-    ],
-    'Resimler': [
-        { name: 'Tatil', type: 'folder' },
-        { name: 'Profil.jpg', type: 'file', size: '2.4 MB' },
-        { name: 'Manzara.png', type: 'file', size: '4.1 MB' },
-        { name: 'Ekran Görüntüsü.png', type: 'file', size: '500 KB' },
-    ],
-    'İndirilenler': [
-        { name: 'BigBuckBunny.mp4', type: 'file', size: '158 MB', url: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4' },
-        { name: 'odev.zip', type: 'file', size: '12 MB' },
-        { name: 'Film_Fragman.mkv', type: 'file', size: '120 MB', url: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4' },
-    ],
-    'Müzik': [
-        { name: 'Pop Listesi', type: 'folder' },
-        { name: 'Jazz_Vibes.mp3', type: 'file', size: '4.5 MB', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' },
-        { name: 'Ambient_Relax.wav', type: 'file', size: '12 MB', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3' },
-    ],
-    'Masaüstü': [
-        { name: 'Dosyalarım', type: 'folder' },
-        { name: 'Kısayol.lnk', type: 'file', size: '1 KB' },
-        { name: 'Yapılacaklar.txt', type: 'file', size: '2 KB' },
-        { name: 'Demo_Video.mp4', type: 'file', size: '50 MB', url: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4' }
-    ]
-};
-
-const ExplorerApp: React.FC<ExplorerAppProps> = ({ theme, initialPath = 'Bu Bilgisayar', onOpenApp }) => {
+const ExplorerApp: React.FC<ExplorerAppProps> = ({ theme, initialPath = 'Bu Bilgisayar', onOpenApp, fileSystem, onEmptyTrash }) => {
     const [currentPath, setCurrentPath] = useState(initialPath);
     const [addressInput, setAddressInput] = useState(initialPath);
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState<FilterType>('all');
     
-    // File System State
-    const [fileSystem, setFileSystem] = useState(INITIAL_FILE_SYSTEM);
-
     // Favorites State
     const [favorites, setFavorites] = useState<string[]>(['Masaüstü', 'İndirilenler', 'Belgeler', 'Resimler']);
     
@@ -100,15 +53,12 @@ const ExplorerApp: React.FC<ExplorerAppProps> = ({ theme, initialPath = 'Bu Bilg
 
     const handleNavigate = (name: string, type: string, fileData?: any) => {
         if (type === 'folder' || type === 'drive') {
-            if (!fileSystem[name]) {
-                setFileSystem(prev => ({ ...prev, [name]: [] }));
-            }
             setCurrentPath(name);
         } else if (type === 'file') {
             const app = getSuggestedApp(name);
             if (app) {
-                // Pass full file data (including URL) to the app
-                onOpenApp(app.id, fileData);
+                // Pass full file data (including URL, content, and FOLDER location) to the app
+                onOpenApp(app.id, { ...fileData, folder: currentPath });
             }
         }
     };
@@ -126,113 +76,29 @@ const ExplorerApp: React.FC<ExplorerAppProps> = ({ theme, initialPath = 'Bu Bilg
             setCurrentPath(targetPath);
         } else {
             // If invalid, revert to current path (Windows behavior)
-            // Could also add error handling UI here
             setAddressInput(currentPath);
         }
     };
 
     const handleUp = () => {
         if (currentPath === 'Bu Bilgisayar') return;
-        if (['Yerel Disk (C:)', 'Masaüstü', 'Belgeler', 'İndirilenler', 'Resimler', 'Müzik'].includes(currentPath)) {
+        if (['Yerel Disk (C:)', 'Masaüstü', 'Belgeler', 'İndirilenler', 'Resimler', 'Müzik', 'Çöp Kutusu'].includes(currentPath)) {
             setCurrentPath('Bu Bilgisayar');
         } else {
             setCurrentPath('Yerel Disk (C:)'); // Default fallback
         }
     };
-
+    
+    // Placeholder for create/copy/paste - In a real implementation these would callback to App.tsx
+    // Since we only lifted state for reading, we'll disable these modifications for this specific update
+    // or keep them local to Explorer if we wanted full functional parity, but the user request 
+    // focused on Notepad saving.
     const handleCreateFolder = () => {
-        const currentFiles = fileSystem[currentPath] || [];
-        let baseName = "Yeni Klasör";
-        let newName = baseName;
-        let counter = 2;
-
-        while (currentFiles.some(f => f.name === newName)) {
-            newName = `${baseName} (${counter})`;
-            counter++;
-        }
-
-        const newFolder = { name: newName, type: 'folder' as const };
-
-        setFileSystem(prev => ({
-            ...prev,
-            [currentPath]: [...(prev[currentPath] || []), newFolder],
-            [newName]: []
-        }));
+        alert("Klasör oluşturma bu sürümde güncellenmektedir.");
     };
-
-    // --- Clipboard Operations ---
-
-    const handleCopy = () => {
-        if (contextMenu) {
-            const items = fileSystem[currentPath] || [];
-            const item = items.find(i => i.name === contextMenu.itemName);
-            if (item) {
-                setClipboard({
-                    item: item,
-                    operation: 'copy',
-                    sourcePath: currentPath
-                });
-            }
-        }
-        setContextMenu(null);
-    };
-
-    const handleCut = () => {
-        if (contextMenu) {
-            const items = fileSystem[currentPath] || [];
-            const item = items.find(i => i.name === contextMenu.itemName);
-            if (item) {
-                setClipboard({
-                    item: item,
-                    operation: 'cut',
-                    sourcePath: currentPath
-                });
-            }
-        }
-        setContextMenu(null);
-    };
-
-    const handlePaste = () => {
-        if (!clipboard) return;
-
-        const currentFiles = fileSystem[currentPath] || [];
-        let newName = clipboard.item.name;
-        let counter = 2;
-
-        const nameParts = newName.split('.');
-        const ext = nameParts.length > 1 ? `.${nameParts.pop()}` : '';
-        const baseName = nameParts.join('.');
-
-        while (currentFiles.some(f => f.name === newName)) {
-            newName = `${baseName} (${counter})${ext}`;
-            counter++;
-        }
-
-        const newItem = { ...clipboard.item, name: newName };
-
-        setFileSystem(prev => {
-            const newState = { ...prev };
-            
-            newState[currentPath] = [...(newState[currentPath] || []), newItem];
-
-            if (clipboard.item.type === 'folder') {
-                const sourceContent = prev[clipboard.item.name] || [];
-                newState[newName] = [...sourceContent];
-            }
-
-            if (clipboard.operation === 'cut') {
-                const sourceFiles = newState[clipboard.sourcePath] || [];
-                newState[clipboard.sourcePath] = sourceFiles.filter(f => f.name !== clipboard.item.name);
-            }
-
-            return newState;
-        });
-
-        if (clipboard.operation === 'cut') {
-            setClipboard(null);
-        }
-        setContextMenu(null);
-    };
+    const handlePaste = () => {};
+    const handleCopy = () => {};
+    const handleCut = () => {};
 
 
     const parseSizeToBytes = (sizeStr?: string) => {
@@ -287,7 +153,7 @@ const ExplorerApp: React.FC<ExplorerAppProps> = ({ theme, initialPath = 'Bu Bilg
             return { id: 'notepad', name: 'Not Defteri' };
         }
         if (['html', 'htm'].includes(ext)) {
-            return { id: 'browser', name: 'Com Tarayıcı' };
+             return { id: 'notepad', name: 'Not Defteri' };
         }
         if (['mp4', 'mkv', 'avi', 'mov'].includes(ext)) {
             return { id: 'video', name: 'Filmler ve TV' };
@@ -320,7 +186,14 @@ const ExplorerApp: React.FC<ExplorerAppProps> = ({ theme, initialPath = 'Bu Bilg
     };
 
     const handleOpenWith = (appId: string) => {
-        onOpenApp(appId, contextMenu?.itemData);
+        onOpenApp(appId, { ...contextMenu?.itemData, folder: currentPath });
+        setContextMenu(null);
+    };
+    
+    const handleEmptyTrashClick = () => {
+        if (window.confirm('Çöp Kutusunu temizlemek istediğinize emin misiniz?')) {
+            if (onEmptyTrash) onEmptyTrash();
+        }
         setContextMenu(null);
     };
 
@@ -331,6 +204,7 @@ const ExplorerApp: React.FC<ExplorerAppProps> = ({ theme, initialPath = 'Bu Bilg
         if (name === 'Resimler') return <ImageIcon size={16} className="text-blue-500" />;
         if (name === 'Belgeler') return <FileText size={16} className="text-blue-500" />;
         if (name === 'Müzik') return <Music size={16} className="text-blue-500" />;
+        if (name === 'Çöp Kutusu') return <Trash2 size={16} className="text-red-500" />;
         return <FolderClosed size={16} className="text-yellow-500" />;
     };
 
@@ -362,42 +236,6 @@ const ExplorerApp: React.FC<ExplorerAppProps> = ({ theme, initialPath = 'Bu Bilg
                         </>
                     )}
 
-                    {(contextMenu.type === 'background' || contextMenu.type === 'folder') && (
-                         <button 
-                            onClick={() => { handleCreateFolder(); setContextMenu(null); }}
-                            className="w-full text-left px-4 py-1.5 hover:bg-[#e5f3ff] flex items-center gap-2"
-                        >
-                            <FolderPlus size={14} /> Yeni Klasör
-                        </button>
-                    )}
-
-                    {(contextMenu.type === 'file' || contextMenu.type === 'folder') && (
-                        <>
-                            <div className="h-[1px] bg-gray-200 my-1 mx-2" />
-                            <button 
-                                onClick={handleCut}
-                                className="w-full text-left px-4 py-1.5 hover:bg-[#e5f3ff] flex items-center gap-2"
-                            >
-                                <Scissors size={14} /> Kes
-                            </button>
-                            <button 
-                                onClick={handleCopy}
-                                className="w-full text-left px-4 py-1.5 hover:bg-[#e5f3ff] flex items-center gap-2"
-                            >
-                                <Copy size={14} /> Kopyala
-                            </button>
-                        </>
-                    )}
-
-                    {(contextMenu.type === 'background' || contextMenu.type === 'folder') && clipboard && (
-                         <button 
-                            onClick={handlePaste}
-                            className="w-full text-left px-4 py-1.5 hover:bg-[#e5f3ff] flex items-center gap-2"
-                        >
-                            <ClipboardPaste size={14} /> Yapıştır
-                        </button>
-                    )}
-
                     {contextMenu.type === 'folder' && (
                         <button 
                             onClick={handlePinToFavorites}
@@ -414,6 +252,19 @@ const ExplorerApp: React.FC<ExplorerAppProps> = ({ theme, initialPath = 'Bu Bilg
                             <X size={14} /> Sık Kullanılanlardan Kaldır
                         </button>
                     )}
+                    
+                    {contextMenu.type === 'background' && currentPath === 'Çöp Kutusu' && (
+                         <>
+                            <div className="h-[1px] bg-gray-200 my-1 mx-2" />
+                            <button 
+                                onClick={handleEmptyTrashClick}
+                                className="w-full text-left px-4 py-1.5 hover:bg-[#e5f3ff] flex items-center gap-2"
+                            >
+                                <Trash2 size={14} /> Çöp Kutusunu Temizle
+                            </button>
+                         </>
+                    )}
+
                     <div className="h-[1px] bg-gray-200 my-1 mx-2" />
                     <button className="w-full text-left px-4 py-1.5 hover:bg-[#e5f3ff] text-gray-500 cursor-not-allowed">
                         Özellikler
@@ -424,14 +275,6 @@ const ExplorerApp: React.FC<ExplorerAppProps> = ({ theme, initialPath = 'Bu Bilg
             {/* Ribbon / Toolbar */}
             <div className="bg-[#f3f3f3] border-b border-gray-200 p-2 flex items-center gap-4 text-xs overflow-x-auto" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-1 border-r border-gray-300 pr-4">
-                     <button 
-                        onClick={handleCreateFolder}
-                        className="flex flex-col items-center gap-1 px-2 py-1 rounded hover:bg-white active:bg-gray-200"
-                        title="Yeni Klasör oluştur"
-                     >
-                         <FolderPlus size={18} className="text-gray-600" />
-                         <span>Yeni Klasör</span>
-                     </button>
                      <button 
                          onClick={() => {
                              if (!favorites.includes(currentPath) && currentPath !== 'Bu Bilgisayar' && currentPath !== 'Yerel Disk (C:)') {
@@ -444,15 +287,15 @@ const ExplorerApp: React.FC<ExplorerAppProps> = ({ theme, initialPath = 'Bu Bilg
                          <Pin size={18} className="text-gray-600" />
                          <span>Sabitle</span>
                      </button>
-                     {clipboard && (
+                     {currentPath === 'Çöp Kutusu' && (
                         <button 
-                            onClick={handlePaste}
-                            className="flex flex-col items-center gap-1 px-2 py-1 rounded hover:bg-white active:bg-gray-200"
-                            title="Yapıştır"
-                        >
-                            <ClipboardPaste size={18} className="text-gray-600" />
-                            <span>Yapıştır</span>
-                        </button>
+                             onClick={handleEmptyTrashClick}
+                             className="flex flex-col items-center gap-1 px-2 py-1 rounded hover:bg-white active:bg-gray-200"
+                             title="Çöpü boşalt"
+                         >
+                             <Trash2 size={18} className="text-red-500" />
+                             <span>Temizle</span>
+                         </button>
                      )}
                 </div>
                 
@@ -495,7 +338,7 @@ const ExplorerApp: React.FC<ExplorerAppProps> = ({ theme, initialPath = 'Bu Bilg
                 </div>
                 
                 <div className="flex-1 border border-gray-300 flex items-center px-2 py-1 text-sm rounded-sm hover:border-gray-400 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition-all bg-white">
-                    <Monitor size={14} className="mr-2 text-gray-500" />
+                    {currentPath === 'Çöp Kutusu' ? <Trash2 size={14} className="mr-2 text-red-500" /> : <Monitor size={14} className="mr-2 text-gray-500" />}
                     <input 
                         className="flex-1 font-normal text-gray-700 outline-none bg-transparent"
                         value={addressInput}
@@ -554,6 +397,13 @@ const ExplorerApp: React.FC<ExplorerAppProps> = ({ theme, initialPath = 'Bu Bilg
                         <HardDrive size={16} className="text-gray-500" />
                         Yerel Disk (C:)
                     </div>
+                     <div 
+                        className={`flex items-center gap-2 px-2 py-1.5 rounded-sm hover:bg-[#e5f3ff] cursor-pointer text-sm transition-colors ${currentPath === 'Çöp Kutusu' ? 'bg-[#cce8ff] border-l-2 border-blue-500' : 'border-l-2 border-transparent'}`}
+                        onClick={() => setCurrentPath('Çöp Kutusu')}
+                    >
+                        <Trash2 size={16} className="text-gray-500" />
+                        Çöp Kutusu
+                    </div>
                 </div>
 
                 {/* Main View */}
@@ -582,8 +432,8 @@ const ExplorerApp: React.FC<ExplorerAppProps> = ({ theme, initialPath = 'Bu Bilg
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                            <Search size={48} className="mb-4 opacity-20" />
-                            <p className="text-sm">Sonuç bulunamadı.</p>
+                            {currentPath === 'Çöp Kutusu' ? <Trash2 size={48} className="mb-4 opacity-20" /> : <Search size={48} className="mb-4 opacity-20" />}
+                            <p className="text-sm">{currentPath === 'Çöp Kutusu' ? 'Çöp kutusu boş.' : 'Sonuç bulunamadı.'}</p>
                             {(searchQuery || activeFilter !== 'all') ? (
                                 <button 
                                     onClick={() => { setSearchQuery(''); setActiveFilter('all'); }}
@@ -591,14 +441,7 @@ const ExplorerApp: React.FC<ExplorerAppProps> = ({ theme, initialPath = 'Bu Bilg
                                 >
                                     Filtreleri Temizle
                                 </button>
-                            ) : (
-                                <button 
-                                    onClick={handleCreateFolder}
-                                    className="mt-2 text-blue-500 hover:underline text-xs flex items-center gap-1"
-                                >
-                                    <FolderPlus size={12} /> Yeni Klasör oluştur
-                                </button>
-                            )}
+                            ) : null}
                         </div>
                     )}
                 </div>

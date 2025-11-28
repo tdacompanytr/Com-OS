@@ -1,7 +1,7 @@
 import React, { ReactNode, ComponentType } from 'react';
 
 // Allow string for dynamic game IDs
-export type AppId = 'browser' | 'market' | 'settings' | 'calculator' | 'notepad' | 'assistant' | 'explorer' | 'video' | 'music' | string;
+export type AppId = 'market' | 'settings' | 'calculator' | 'notepad' | 'assistant' | 'explorer' | 'video' | 'music' | string;
 
 export interface AppDefinition {
   id: AppId;
@@ -25,6 +25,13 @@ export interface WindowState {
   zIndex: number;
   // Optional data passed to the app (e.g., which game to load or file to open)
   data?: any;
+}
+
+export interface DesktopItem {
+  id: string;
+  appId: AppId;
+  x: number;
+  y: number;
 }
 
 export interface MarketItem {
@@ -60,3 +67,6 @@ export interface Notification {
   time: string;
   icon?: ReactNode;
 }
+
+export type ViewMode = 'small' | 'medium' | 'large';
+export type SortMode = 'name' | 'size' | 'type';

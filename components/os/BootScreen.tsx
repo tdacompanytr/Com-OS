@@ -30,7 +30,7 @@ const BootScreen: React.FC<BootScreenProps> = ({ onBootComplete }) => {
       
       {/* Merkez Logo */}
       <div className="mb-16 animate-in fade-in duration-1000">
-         <Cpu size={120} className="text-blue-600 drop-shadow-[0_0_15px_rgba(37,99,235,0.5)]" />
+         <Cpu size={120} className="text-red-600 drop-shadow-[0_0_15px_rgba(220,38,38,0.5)]" />
       </div>
       
       {/* Windows Tarzı Dönen Noktalar - 5 saniye sonra gelir */}

@@ -1,8 +1,8 @@
 import React from 'react';
 import { AppId, MarketItem, ThemeConfig } from './types';
-import { Globe, ShoppingBag, Settings, Calculator, FileText, Cpu, Gamepad2, FolderClosed, Film, Music } from 'lucide-react';
+import { ShoppingBag, Settings, Calculator, FileText, Cpu, Gamepad2, FolderClosed, Film, Music, Trash2 } from 'lucide-react';
 
-export const WALLPAPER_URL = "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80";
+export const WALLPAPER_URL = "https://images.unsplash.com/photo-1533134486753-c833f0ed4866?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80";
 
 export const PRESET_WALLPAPERS = [
   "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80", // Default Dark
@@ -81,7 +81,6 @@ export const GameIcon = () => <Gamepad2 className="w-full h-full text-indigo-400
 
 export const APP_REGISTRY: Record<string, { title: string; icon: React.ReactElement }> = {
   explorer: { title: "Dosya Gezgini", icon: <FolderClosed className="w-full h-full text-yellow-400 fill-yellow-400" /> },
-  browser: { title: "Com Tarayıcı", icon: <Globe className="w-full h-full text-blue-400" /> },
   market: { title: "Com Mağaza", icon: <ShoppingBag className="w-full h-full text-white" /> },
   settings: { title: "Ayarlar", icon: <Settings className="w-full h-full text-gray-400" /> },
   calculator: { title: "Hesap Makinesi", icon: <Calculator className="w-full h-full text-cyan-400" /> },
@@ -89,6 +88,7 @@ export const APP_REGISTRY: Record<string, { title: string; icon: React.ReactElem
   assistant: { title: "Com Asistan", icon: <Cpu className="w-full h-full text-purple-400" /> },
   video: { title: "Filmler ve TV", icon: <Film className="w-full h-full text-pink-500" /> },
   music: { title: "Com Müzik", icon: <Music className="w-full h-full text-orange-400" /> },
+  // Recycle bin is handled manually in App.tsx for dynamic icon state, but could be listed here
 };
 
 // Generate 100+ Mock Games for the Market
