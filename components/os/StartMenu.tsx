@@ -12,9 +12,10 @@ interface StartMenuProps {
   onShutdown: () => void;
   registry: Record<string, { title: string; icon: React.ReactNode }>;
   theme: ThemeConfig;
+  onPlayClickSound?: () => void;
 }
 
-const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onAppClick, onClose, onShutdown, registry, theme }) => {
+const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onAppClick, onClose, onShutdown, registry, theme, onPlayClickSound }) => {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 
   // Group apps alphabetically
@@ -33,6 +34,11 @@ const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onAppClick, onClose, onSh
   }, [registry]);
   
   if (!isOpen) return null;
+
+  const handleClick = (callback?: () => void) => {
+      if (onPlayClickSound) onPlayClickSound();
+      if (callback) callback();
+  };
 
   const Tile = ({ 
     size = 'medium', 
@@ -62,7 +68,7 @@ const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onAppClick, onClose, onSh
 
     return (
       <div 
-        onClick={onClick}
+        onClick={() => handleClick(onClick)}
         className={`${colSpan} ${rowSpan} ${height} ${color} relative group cursor-pointer transition-transform duration-100 active:scale-95 flex flex-col justify-between overflow-hidden shadow-sm outline outline-2 outline-transparent hover:outline-gray-400/50 hover:z-10`}
       >
         {content ? content : (
@@ -80,7 +86,7 @@ const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onAppClick, onClose, onSh
 
   const SidebarButton = ({ icon, label, onClick }: { icon: React.ReactNode, label: string, onClick?: () => void }) => (
     <button 
-      onClick={onClick}
+      onClick={() => handleClick(onClick)}
       className={`w-full h-12 flex items-center px-3 hover:bg-white/10 transition-colors duration-150 group text-white`}
       title={label}
     >
@@ -127,7 +133,7 @@ const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onAppClick, onClose, onSh
               {['market', 'explorer'].map(id => (
                   <button
                     key={id}
-                    onClick={() => { onAppClick(id as AppId); onClose(); }}
+                    onClick={() => handleClick(() => { onAppClick(id as AppId); onClose(); })}
                     className="flex items-center gap-3 w-full p-2 hover:bg-white/10 text-sm text-left transition-colors duration-100"
                   >
                     <div className="w-8 h-8 p-1 bg-[#0078d7] flex items-center justify-center">
@@ -147,7 +153,7 @@ const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onAppClick, onClose, onSh
                 {groupedApps[char].map((app: any) => (
                    <button
                     key={app.id}
-                    onClick={() => { onAppClick(app.id as AppId); onClose(); }}
+                    onClick={() => handleClick(() => { onAppClick(app.id as AppId); onClose(); })}
                     className="flex items-center gap-3 w-full p-2 hover:bg-white/10 text-sm text-left transition-colors duration-100 group"
                   >
                     <div className="w-8 h-8 p-1.5 flex items-center justify-center bg-gray-600 group-hover:bg-[#0078d7] transition-colors">

@@ -53,6 +53,24 @@ const CalculatorApp: React.FC<CalculatorAppProps> = ({ theme }) => {
   const [date1, setDate1] = useState(new Date().toISOString().split('T')[0]);
   const [date2, setDate2] = useState(new Date().toISOString().split('T')[0]);
 
+  const playClickSound = () => {
+    try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, ctx.currentTime);
+        gain.gain.setValueAtTime(0.05, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.05);
+    } catch {}
+  };
+
   // Init default units when mode changes
   useEffect(() => {
       if (['CURRENCY', 'VOLUME', 'LENGTH', 'SPEED', 'DATA'].includes(mode)) {
@@ -66,6 +84,7 @@ const CalculatorApp: React.FC<CalculatorAppProps> = ({ theme }) => {
   // --- LOGIC: Standard & Scientific ---
 
   const handleNumber = (num: string) => {
+    playClickSound();
     if (currentValue === '0' || shouldReset) {
       setCurrentValue(num);
       setShouldReset(false);
@@ -75,6 +94,7 @@ const CalculatorApp: React.FC<CalculatorAppProps> = ({ theme }) => {
   };
 
   const handleOperator = (op: string) => {
+    playClickSound();
     if (operation && !shouldReset && previousValue) {
        calculate();
     }
@@ -108,6 +128,7 @@ const CalculatorApp: React.FC<CalculatorAppProps> = ({ theme }) => {
   };
 
   const handleScientific = (func: string) => {
+      playClickSound();
       const val = parseFloat(currentValue);
       let res = 0;
       switch(func) {
@@ -128,12 +149,14 @@ const CalculatorApp: React.FC<CalculatorAppProps> = ({ theme }) => {
   };
 
   const clear = () => {
+    playClickSound();
     setCurrentValue('0');
     setPreviousValue(null);
     setOperation(null);
   };
 
   const deleteLast = () => {
+    playClickSound();
     if (currentValue.length === 1) {
       setCurrentValue('0');
     } else {
@@ -148,18 +171,6 @@ const CalculatorApp: React.FC<CalculatorAppProps> = ({ theme }) => {
       const units = CONVERSION_DATA[mode].units;
       const val = parseFloat(convValue);
       if (isNaN(val)) return '...';
-
-      // Logic: Convert FROM -> BASE -> TO
-      // Ratio represents "How many of this unit fits in the Base Unit" OR "Value relative to Base"
-      // Let's assume standard ratio map: Base = 1.
-      // E.g. Length (Base m): cm=100, km=0.001. 
-      // 1 m = 100 cm.  Value(cm) = Value(m) * 100.
-      
-      // We stored ratios relative to base? Let's check logic in CONVERSION_DATA.
-      // Length: 'm': 1, 'cm': 100. This means 1 meter = 100 cm.
-      // To convert FROM (cm) TO (km):
-      // Val(Base) = Val(From) / Ratio(From)
-      // Val(To) = Val(Base) * Ratio(To)
       
       const ratioFrom = units[fromUnit];
       const ratioTo = units[toUnit];
@@ -173,6 +184,7 @@ const CalculatorApp: React.FC<CalculatorAppProps> = ({ theme }) => {
   };
 
   const handleConvNumber = (num: string) => {
+      playClickSound();
       setConvValue(prev => prev === '0' ? num : prev + num);
   };
 

@@ -43,12 +43,33 @@ const ExplorerApp: React.FC<ExplorerAppProps> = ({ theme, initialPath = 'Bu Bilg
         itemData?: any;
     } | null>(null);
 
+    const playNavSound = () => {
+         try {
+            const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+            if (!AudioContext) return;
+            const ctx = new AudioContext();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            
+            // Subtle click sound
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(600, ctx.currentTime);
+            gain.gain.setValueAtTime(0.02, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.05);
+        } catch {}
+    };
+
     // Sync address input with current path
     useEffect(() => {
         setAddressInput(currentPath);
         setSearchQuery('');
         setActiveFilter('all');
         setContextMenu(null);
+        playNavSound();
     }, [currentPath]);
 
     const handleNavigate = (name: string, type: string, fileData?: any) => {

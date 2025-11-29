@@ -400,6 +400,107 @@ const App: React.FC = () => {
   // Dragging State for Desktop Icons
   const [draggingItem, setDraggingItem] = useState<{id: string, startX: number, startY: number, initialItemX: number, initialItemY: number} | null>(null);
 
+  // --- SOUND SYSTEM ---
+  const playSystemSound = useCallback((type: 'startup' | 'shutdown' | 'error' | 'notification' | 'trash' | 'click' | 'open' | 'close') => {
+    try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        switch (type) {
+            case 'startup':
+                // FMaj7 Chord
+                const freqs = [369.99, 466.16, 554.37, 698.46]; 
+                freqs.forEach((freq, i) => {
+                    const osc2 = ctx.createOscillator();
+                    const gain2 = ctx.createGain();
+                    osc2.type = i % 2 === 0 ? 'sine' : 'triangle';
+                    osc2.frequency.value = freq;
+                    gain2.gain.setValueAtTime(0, now);
+                    gain2.gain.linearRampToValueAtTime(0.05, now + 0.1 + (i * 0.05)); 
+                    gain2.gain.exponentialRampToValueAtTime(0.001, now + 3);
+                    osc2.connect(gain2);
+                    gain2.connect(ctx.destination);
+                    osc2.start(now);
+                    osc2.stop(now + 3);
+                });
+                return; // Custom handled
+            case 'shutdown':
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(440, now); // A
+                osc.frequency.exponentialRampToValueAtTime(110, now + 1.5);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.linearRampToValueAtTime(0, now + 1.5);
+                osc.start(now);
+                osc.stop(now + 1.5);
+                break;
+            case 'error':
+                // "Chord" style error (multiple oscs needed, simulating simpler version)
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, now);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now);
+                osc.stop(now + 0.3);
+                break;
+            case 'notification':
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, now);
+                osc.frequency.setValueAtTime(1100, now + 0.1);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                osc.start(now);
+                osc.stop(now + 0.5);
+                break;
+            case 'trash':
+                // Simulated crunch/low noise
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(80, now);
+                osc.frequency.exponentialRampToValueAtTime(20, now + 0.3);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.3);
+                osc.start(now);
+                osc.stop(now + 0.3);
+                break;
+            case 'click':
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, now);
+                gain.gain.setValueAtTime(0.05, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                osc.start(now);
+                osc.stop(now + 0.05);
+                break;
+            case 'open':
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.linearRampToValueAtTime(500, now + 0.1);
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.05, now + 0.05);
+                gain.gain.linearRampToValueAtTime(0, now + 0.2);
+                osc.start(now);
+                osc.stop(now + 0.2);
+                break;
+             case 'close':
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.linearRampToValueAtTime(200, now + 0.1);
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.05, now + 0.05);
+                gain.gain.linearRampToValueAtTime(0, now + 0.2);
+                osc.start(now);
+                osc.stop(now + 0.2);
+                break;
+        }
+    } catch (e) {
+        console.error("Audio playback error", e);
+    }
+  }, []);
+
   const handleSetPassword = (pass: string) => {
       if (pass) {
           localStorage.setItem('com_os_pwd', pass);
@@ -417,6 +518,7 @@ const App: React.FC = () => {
         ...prev,
         [appId]: item
     }));
+    playSystemSound('notification');
     setNotifications(prev => [{
         id: Date.now().toString(),
         title: 'Kurulum Tamamlandı',
@@ -471,6 +573,7 @@ const App: React.FC = () => {
   };
 
   const handleEmptyTrash = () => {
+    playSystemSound('trash');
     setFileSystem(prev => ({
         ...prev,
         'Çöp Kutusu': []
@@ -678,6 +781,7 @@ const App: React.FC = () => {
               const appId = item.appId;
               if (!pinnedAppIds.includes(appId)) {
                   setPinnedAppIds(prev => [...prev, appId]);
+                  playSystemSound('notification');
                   setNotifications(prev => [{
                     id: Date.now().toString(),
                     title: 'Sabitlendi',
@@ -715,13 +819,11 @@ const App: React.FC = () => {
                       if (fileToMove) {
                           newState['Masaüstü'] = desktopFiles.filter(f => f.name !== fileName);
                           newState['Çöp Kutusu'] = [...(newState['Çöp Kutusu'] || []), fileToMove];
-                          
-                           // Play sound or notification
-                           const audio = new Audio(); // Placeholder for sound
                       }
                       return newState;
                   });
                   
+                  playSystemSound('trash');
                   setNotifications(prev => [{
                     id: Date.now().toString(),
                     title: 'Dosya Silindi',
@@ -735,7 +837,7 @@ const App: React.FC = () => {
       }
 
       setDraggingItem(null);
-  }, [draggingItem, desktopItems, pinnedAppIds, dynamicRegistry]);
+  }, [draggingItem, desktopItems, pinnedAppIds, dynamicRegistry, playSystemSound]);
 
   useEffect(() => {
       if (draggingItem) {
@@ -797,6 +899,9 @@ const App: React.FC = () => {
         return;
     }
     
+    // Play Open Sound
+    playSystemSound('open');
+    
     // Recycle Bin Special Case
     if (appId === 'recycle-bin') {
         const newId = `recycle-bin-${Date.now()}`;
@@ -822,10 +927,12 @@ const App: React.FC = () => {
         setWindows(prev => prev.map(w => {
             if (w.id === instanceId) {
                 if (w.isMinimized) {
+                    playSystemSound('open'); // Restore sound
                     setActiveWindowId(instanceId);
                     setNextZIndex(z => z + 1);
                     return { ...w, isMinimized: false, zIndex: nextZIndex + 1 };
                 } else if (activeWindowId === instanceId) {
+                    playSystemSound('close'); // Minimize sound
                     return { ...w, isMinimized: true };
                 } else {
                      setActiveWindowId(instanceId);
@@ -862,14 +969,16 @@ const App: React.FC = () => {
     setActiveWindowId(newId);
     setIsStartOpen(false);
     setIsActionCenterOpen(false);
-  }, [windows.length, nextZIndex, activeWindowId, dynamicRegistry, fileSystem]);
+  }, [windows.length, nextZIndex, activeWindowId, dynamicRegistry, fileSystem, playSystemSound]);
 
   const closeWindow = (id: string) => {
+    playSystemSound('close');
     setWindows(prev => prev.filter(w => w.id !== id));
     if (activeWindowId === id) setActiveWindowId(null);
   };
 
   const minimizeWindow = (id: string) => {
+    playSystemSound('close');
     setWindows(prev => prev.map(w => w.id === id ? { ...w, isMinimized: true } : w));
     if (activeWindowId === id) setActiveWindowId(null);
   };
@@ -881,40 +990,13 @@ const App: React.FC = () => {
     setWindows(prev => prev.map(w => w.id === id ? { ...w, zIndex: nextZIndex + 1 } : w));
   };
 
-  const playStartupSound = () => {
-    try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContext) return;
-      
-      const ctx = new AudioContext();
-      const now = ctx.currentTime;
-      const freqs = [369.99, 466.16, 554.37, 698.46]; 
-      
-      freqs.forEach((freq, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = i % 2 === 0 ? 'sine' : 'triangle';
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0, now);
-        gain.gain.linearRampToValueAtTime(0.05, now + 0.1 + (i * 0.05)); 
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 3);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now);
-        osc.stop(now + 3);
-      });
-    } catch (e) {
-      console.error("Audio playback failed", e);
-    }
-  };
-
   useEffect(() => {
     if (isBooted && isLocked) {
       setTimeout(() => {
-        playStartupSound();
+        playSystemSound('startup');
       }, 500);
     }
-  }, [isBooted, isLocked]);
+  }, [isBooted, isLocked, playSystemSound]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -938,6 +1020,7 @@ const App: React.FC = () => {
   };
 
   const handleShutdown = () => {
+    playSystemSound('shutdown');
     setIsStartOpen(false);
     setIsShuttingDown(true);
     setTimeout(() => {
@@ -952,7 +1035,10 @@ const App: React.FC = () => {
   const handleUnlock = () => {
       setIsLocked(false);
   };
-
+  
+  // Pass playSound prop to children if needed, or use simple callbacks.
+  // We'll wrap openApp to include sound, so we pass that.
+  
   // Determine icon size based on view mode
   const iconSize = desktopViewMode === 'large' ? 'w-32 h-32' : desktopViewMode === 'small' ? 'w-20 h-20' : 'w-24 h-24';
   const innerIconSize = desktopViewMode === 'large' ? 'w-16 h-16' : desktopViewMode === 'small' ? 'w-8 h-8' : 'w-10 h-10';
@@ -1127,10 +1213,11 @@ const App: React.FC = () => {
         <StartMenu 
             isOpen={isStartOpen} 
             onClose={() => setIsStartOpen(false)}
-            onAppClick={openApp}
+            onAppClick={(id) => openApp(id)}
             onShutdown={handleShutdown}
             registry={dynamicRegistry}
             theme={currentTheme}
+            onPlayClickSound={() => playSystemSound('click')}
         />
 
         <ActionCenter 
@@ -1140,7 +1227,10 @@ const App: React.FC = () => {
             onClearAll={() => setNotifications([])}
             theme={currentTheme}
             toggleSettings={toggleSettings}
-            onToggle={(key) => setToggleSettings(prev => ({...prev, [key]: !prev[key as keyof typeof toggleSettings]}))}
+            onToggle={(key) => {
+                setToggleSettings(prev => ({...prev, [key]: !prev[key as keyof typeof toggleSettings]}));
+                playSystemSound('click');
+            }}
         />
 
         <CalendarFlyout 
@@ -1156,6 +1246,7 @@ const App: React.FC = () => {
                 setIsStartOpen(!isStartOpen);
                 setIsActionCenterOpen(false);
                 setIsCalendarOpen(false);
+                playSystemSound('click');
             }}
             isStartOpen={isStartOpen}
             registry={dynamicRegistry}
@@ -1164,11 +1255,13 @@ const App: React.FC = () => {
                 setIsActionCenterOpen(!isActionCenterOpen);
                 setIsStartOpen(false);
                 setIsCalendarOpen(false);
+                playSystemSound('click');
             }}
             onToggleCalendar={() => {
                 setIsCalendarOpen(!isCalendarOpen);
                 setIsStartOpen(false);
                 setIsActionCenterOpen(false);
+                playSystemSound('click');
             }}
             hasNotifications={notifications.length > 0}
             pinnedAppIds={pinnedAppIds}
